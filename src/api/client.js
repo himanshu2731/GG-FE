@@ -22,6 +22,13 @@ export async function request(path, options = {}) {
     headers,
   })
 
+  if (response.status === 204) {
+    if (!response.ok) {
+      throw Object.assign(new Error('Request failed'), { status: response.status })
+    }
+    return null
+  }
+
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {

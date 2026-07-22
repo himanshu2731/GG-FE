@@ -1,134 +1,57 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
-import { listDocuments, listUsers, uploadDocument } from '../../api/documents'
-import { ROLES, useAuth } from '../../auth/AuthContext'
-import PdfSignaturePlacer from '../../components/PdfSignaturePlacer'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { listDocuments } from '../../api/documents'
+import { useAuth } from '../../auth/AuthContext'
 
-const inputClass =
-  'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
-const labelClass = 'mb-1.5 block text-sm font-medium text-heading'
-
-const emptyForm = {
-  title: '',
-  assigned_user_id: '',
+function shortId(id) {
+  if (!id) return '—'
+  return id.slice(0, 8)
 }
 
 export default function SuperUserDashboard() {
   const { user, isAuthenticated, isSuperUser, logout } = useAuth()
-  const [users, setUsers] = useState([])
+  const navigate = useNavigate()
   const [documents, setDocuments] = useState([])
-  const [form, setForm] = useState(emptyForm)
-  const [file, setFile] = useState(null)
-  const [placements, setPlacements] = useState([])
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [loadingLists, setLoadingLists] = useState(true)
+  const [loading, setLoading] = useState(true)
 
-  const loadLists = useCallback(async () => {
-    setLoadingLists(true)
+  const loadDocuments = useCallback(async () => {
+    setLoading(true)
     setError('')
     try {
-      const [usersRes, docsRes] = await Promise.all([listUsers(), listDocuments({ limit: 50 })])
-      setUsers(usersRes.users || [])
-      setDocuments(docsRes.documents || [])
+      const res = await listDocuments({ limit: 100 })
+      setDocuments(res.documents || [])
     } catch (err) {
-      setError(err.message || 'Failed to load data')
+      setError(err.message || 'Failed to load documents')
     } finally {
-      setLoadingLists(false)
+      setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (isAuthenticated && isSuperUser) {
-      loadLists()
-    }
-  }, [isAuthenticated, isSuperUser, loadLists])
+    if (isAuthenticated && isSuperUser) loadDocuments()
+  }, [isAuthenticated, isSuperUser, loadDocuments])
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
-  if (!isSuperUser) {
-    return <Navigate to="/" replace />
-  }
-
-  function updateField(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }))
-  }
-
-  function onFileChange(e) {
-    const next = e.target.files?.[0] || null
-    setFile(next)
-    setPlacements([])
-    setError('')
-    setSuccess('')
-  }
-
-  async function handleUpload(e) {
-    e.preventDefault()
-    setError('')
-    setSuccess('')
-
-    if (!file) {
-      setError('PDF file is required')
-      return
-    }
-    if (!form.assigned_user_id) {
-      setError('Select a user to assign')
-      return
-    }
-    if (placements.length === 0) {
-      setError('Drag the signature canvas onto the PDF at least once')
-      return
-    }
-    if (!placements.some((p) => p.role === 'USER')) {
-      setError('At least one placement must be assigned to the User')
-      return
-    }
-
-    const payload = placements.map((p) => ({
-      id: p.id,
-      role: p.role,
-      page: p.page,
-      x: p.x,
-      y: p.y,
-      width: p.width,
-      height: p.height,
-      label: p.label || (p.role === 'USER' ? 'User' : 'Super User'),
-    }))
-
-    const body = new FormData()
-    body.append('title', form.title)
-    body.append('assigned_user_id', form.assigned_user_id)
-    body.append('file', file)
-    body.append('placements', JSON.stringify(payload))
-
-    setLoading(true)
-    try {
-      await uploadDocument(body)
-      setSuccess('Document uploaded and assigned')
-      setForm(emptyForm)
-      setFile(null)
-      setPlacements([])
-      e.target.reset()
-      await loadLists()
-    } catch (err) {
-      setError(err.message || 'Upload failed')
-    } finally {
-      setLoading(false)
-    }
-  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (!isSuperUser) return <Navigate to="/" replace />
 
   return (
     <main className="mx-auto min-h-svh max-w-5xl px-6 py-8">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-heading">Super User dashboard</h1>
+          <h1 className="text-2xl font-semibold text-heading">Documents</h1>
           <p className="mt-1 text-sm text-muted">
             {user.name} · {user.email}
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={loadDocuments}
+            className="text-sm text-muted hover:text-body"
+          >
+            Refresh
+          </button>
           <Link to="/" className="text-sm text-muted hover:text-body">
             Home
           </Link>
@@ -139,147 +62,75 @@ export default function SuperUserDashboard() {
           >
             Log out
           </button>
+          <Link
+            to="/super-user/documents/new"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-[#04110f] hover:bg-accent-hover"
+          >
+            Add document
+          </Link>
         </div>
       </header>
 
-      <section className="mb-8 rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
-        <h2 className="mb-4 text-lg font-semibold text-heading">Upload & assign PDF</h2>
-        <p className="mb-5 text-sm text-body">
-          Drag the single signature canvas onto the PDF as many times as you need. Each drop creates
-          a placement you can move, resize, or remove.
+      {error ? (
+        <p className="mb-4 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {error}
         </p>
+      ) : null}
 
-        <form className="grid gap-4" onSubmit={handleUpload}>
-          <div>
-            <label className={labelClass} htmlFor="title">
-              Title
-            </label>
-            <input
-              id="title"
-              required
-              value={form.title}
-              onChange={(e) => updateField('title', e.target.value)}
-              className={inputClass}
-              placeholder="Contract agreement"
-            />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="assigned_user_id">
-              Assign to user
-            </label>
-            <select
-              id="assigned_user_id"
-              required
-              value={form.assigned_user_id}
-              onChange={(e) => updateField('assigned_user_id', e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Select a user</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.email})
-                </option>
-              ))}
-            </select>
-            {!loadingLists && users.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">
-                No users with role {ROLES.USER} yet. Create a User account first.
-              </p>
-            ) : null}
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="file">
-              PDF file
-            </label>
-            <input
-              id="file"
-              type="file"
-              accept="application/pdf,.pdf"
-              required
-              onChange={onFileChange}
-              className="w-full text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-2 file:font-semibold file:text-[#04110f]"
-            />
-          </div>
-
-          <div>
-            <p className={`${labelClass} mb-2`}>Signature canvas</p>
-            <PdfSignaturePlacer file={file} placements={placements} onChange={setPlacements} />
-          </div>
-
-          {error ? (
-            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
-          {success ? (
-            <p className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
-              {success}
-            </p>
-          ) : null}
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-md bg-accent px-4 font-semibold text-[#04110f] hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? 'Uploading…' : 'Upload & assign'}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c] p-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-heading">Uploaded documents</h2>
-          <button
-            type="button"
-            onClick={loadLists}
-            className="text-sm text-accent hover:text-accent-hover"
-          >
-            Refresh
-          </button>
-        </div>
-
-        {loadingLists ? (
-          <p className="text-sm text-muted">Loading…</p>
+      <section className="overflow-hidden rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c]">
+        {loading ? (
+          <p className="p-6 text-sm text-muted">Loading…</p>
         ) : documents.length === 0 ? (
-          <p className="text-sm text-muted">No documents uploaded yet.</p>
+          <div className="p-8 text-center">
+            <p className="mb-4 text-sm text-muted">No documents yet.</p>
+            <Link
+              to="/super-user/documents/new"
+              className="inline-flex rounded-md bg-accent px-4 py-2 text-sm font-semibold text-[#04110f] hover:bg-accent-hover"
+            >
+              Add document
+            </Link>
+          </div>
         ) : (
-          <ul className="divide-y divide-border">
-            {documents.map((doc) => (
-              <li
-                key={doc.id}
-                className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-medium text-heading">{doc.title}</p>
-                  <p className="text-sm text-muted">
-                    Assigned to {doc.assigned_user?.name} ({doc.assigned_user?.email}) ·{' '}
-                    {doc.status}
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Link
-                    to={`/documents/${doc.id}`}
-                    className="text-sm text-accent hover:text-accent-hover"
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="border-b border-border bg-[#0c1018] text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-4 py-3 font-medium">ID</th>
+                  <th className="px-4 py-3 font-medium">Email</th>
+                  <th className="px-4 py-3 font-medium">PDF name</th>
+                  <th className="px-4 py-3 font-medium">State</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {documents.map((doc) => (
+                  <tr
+                    key={doc.id}
+                    tabIndex={0}
+                    role="link"
+                    onClick={() => navigate(`/super-user/documents/${doc.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(`/super-user/documents/${doc.id}`)
+                      }
+                    }}
+                    className="cursor-pointer transition-colors hover:bg-white/[0.03]"
                   >
-                    View canvases
-                  </Link>
-                  <a
-                    href={doc.file_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm text-muted hover:text-body"
-                  >
-                    Open PDF
-                  </a>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <td className="px-4 py-3 font-mono text-xs text-heading" title={doc.id}>
+                      {shortId(doc.id)}
+                    </td>
+                    <td className="px-4 py-3 text-body">{doc.assigned_user?.email || '—'}</td>
+                    <td className="px-4 py-3 font-medium text-heading">{doc.title}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded border border-border px-2 py-0.5 text-xs text-muted">
+                        {doc.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </main>
