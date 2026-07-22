@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { listDocuments, listUsers, uploadDocument } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
-import PdfSignaturePlacer, { newCanvas } from '../../components/PdfSignaturePlacer'
+import PdfSignaturePlacer from '../../components/PdfSignaturePlacer'
 
 const inputClass =
   'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
@@ -19,7 +19,7 @@ export default function SuperUserDashboard() {
   const [documents, setDocuments] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [file, setFile] = useState(null)
-  const [canvases, setCanvases] = useState(() => [newCanvas('USER')])
+  const [placements, setPlacements] = useState([])
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
@@ -59,7 +59,7 @@ export default function SuperUserDashboard() {
   function onFileChange(e) {
     const next = e.target.files?.[0] || null
     setFile(next)
-    setCanvases([newCanvas('USER')])
+    setPlacements([])
     setError('')
     setSuccess('')
   }
@@ -77,36 +77,31 @@ export default function SuperUserDashboard() {
       setError('Select a user to assign')
       return
     }
-    if (canvases.length === 0) {
-      setError('Add at least one signature canvas')
+    if (placements.length === 0) {
+      setError('Drag the signature canvas onto the PDF at least once')
       return
     }
-    const unplaced = canvases.filter((c) => !c.placed)
-    if (unplaced.length > 0) {
-      setError('Place every canvas on the PDF before uploading')
-      return
-    }
-    if (!canvases.some((c) => c.role === 'USER')) {
-      setError('At least one canvas must be assigned to the User')
+    if (!placements.some((p) => p.role === 'USER')) {
+      setError('At least one placement must be assigned to the User')
       return
     }
 
-    const placements = canvases.map((c) => ({
-      id: c.id,
-      role: c.role,
-      page: c.page,
-      x: c.x,
-      y: c.y,
-      width: c.width,
-      height: c.height,
-      label: c.label || (c.role === 'USER' ? 'User' : 'Super User'),
+    const payload = placements.map((p) => ({
+      id: p.id,
+      role: p.role,
+      page: p.page,
+      x: p.x,
+      y: p.y,
+      width: p.width,
+      height: p.height,
+      label: p.label || (p.role === 'USER' ? 'User' : 'Super User'),
     }))
 
     const body = new FormData()
     body.append('title', form.title)
     body.append('assigned_user_id', form.assigned_user_id)
     body.append('file', file)
-    body.append('placements', JSON.stringify(placements))
+    body.append('placements', JSON.stringify(payload))
 
     setLoading(true)
     try {
@@ -114,7 +109,7 @@ export default function SuperUserDashboard() {
       setSuccess('Document uploaded and assigned')
       setForm(emptyForm)
       setFile(null)
-      setCanvases([newCanvas('USER')])
+      setPlacements([])
       e.target.reset()
       await loadLists()
     } catch (err) {
@@ -150,8 +145,8 @@ export default function SuperUserDashboard() {
       <section className="mb-8 rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
         <h2 className="mb-4 text-lg font-semibold text-heading">Upload & assign PDF</h2>
         <p className="mb-5 text-sm text-body">
-          Add as many white signature canvases as you need. Set each to User or Super User, place
-          and resize them on the PDF. Canvases stay independent of each other.
+          Drag the single signature canvas onto the PDF as many times as you need. Each drop creates
+          a placement you can move, resize, or remove.
         </p>
 
         <form className="grid gap-4" onSubmit={handleUpload}>
@@ -209,8 +204,8 @@ export default function SuperUserDashboard() {
           </div>
 
           <div>
-            <p className={`${labelClass} mb-2`}>Signature canvases</p>
-            <PdfSignaturePlacer file={file} canvases={canvases} onChange={setCanvases} />
+            <p className={`${labelClass} mb-2`}>Signature canvas</p>
+            <PdfSignaturePlacer file={file} placements={placements} onChange={setPlacements} />
           </div>
 
           {error ? (

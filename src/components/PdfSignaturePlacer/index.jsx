@@ -9,47 +9,42 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 const DEFAULT_BOX = { width: 180, height: 70 }
 const MIN_W = 80
 const MIN_H = 40
+const DRAG_TYPE = 'application/x-signature-canvas'
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
 }
 
-function newCanvas(role = 'USER') {
+function makePlacement(role, page, x, y) {
   return {
     id: crypto.randomUUID(),
     role,
-    page: 1,
-    x: 72,
-    y: 72,
+    page,
+    x,
+    y,
     width: DEFAULT_BOX.width,
     height: DEFAULT_BOX.height,
-    placed: false,
     label: role === 'USER' ? 'User' : 'Super User',
   }
 }
 
 /**
- * Super User can add as many white canvases as needed.
- * Select one, place/move/resize on the PDF; others stay put.
+ * One signature canvas in the sidebar. Drag it onto the PDF as many times as needed.
+ * Each drop creates a placement that can be moved, resized, or removed.
  */
-export default function PdfSignaturePlacer({ file, canvases, onChange }) {
+export default function PdfSignaturePlacer({ file, placements, onChange }) {
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 })
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 })
-  const [activeId, setActiveId] = useState(canvases[0]?.id || null)
+  const [placeRole, setPlaceRole] = useState('USER')
+  const [activeId, setActiveId] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
   const layerRef = useRef(null)
-  const canvasesRef = useRef(canvases)
+  const placementsRef = useRef(placements)
   const interactionRef = useRef(null)
 
-  canvasesRef.current = canvases
-
-  useEffect(() => {
-    if (!activeId && canvases[0]) setActiveId(canvases[0].id)
-    if (activeId && !canvases.find((c) => c.id === activeId)) {
-      setActiveId(canvases[0]?.id || null)
-    }
-  }, [canvases, activeId])
+  placementsRef.current = placements
 
   const fileUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
 
@@ -64,25 +59,20 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
     setNumPages(0)
     setPageSize({ width: 0, height: 0 })
     setDisplaySize({ width: 0, height: 0 })
+    setActiveId(null)
   }, [fileUrl])
 
   function updateList(next) {
     onChange(next)
   }
 
-  function patchCanvas(id, patch) {
-    updateList(canvasesRef.current.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  function patchPlacement(id, patch) {
+    updateList(placementsRef.current.map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }
 
-  function addCanvas(role = 'USER') {
-    const c = newCanvas(role)
-    const next = [...canvasesRef.current, c]
-    updateList(next)
-    setActiveId(c.id)
-  }
-
-  function removeCanvas(id) {
-    updateList(canvasesRef.current.filter((c) => c.id !== id))
+  function removePlacement(id) {
+    updateList(placementsRef.current.filter((p) => p.id !== id))
+    if (activeId === id) setActiveId(null)
   }
 
   function clientToPdf(clientX, clientY) {
@@ -95,30 +85,46 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
     }
   }
 
-  function placeActiveAt(clientX, clientY) {
-    if (!activeId) return
-    const current = canvasesRef.current.find((c) => c.id === activeId)
-    if (!current) return
+  function dropAt(clientX, clientY, role = placeRole) {
     const pt = clientToPdf(clientX, clientY)
     if (!pt) return
 
-    const width = current.width || DEFAULT_BOX.width
-    const height = current.height || DEFAULT_BOX.height
+    const width = DEFAULT_BOX.width
+    const height = DEFAULT_BOX.height
     const x = clamp(pt.x - width / 2, 0, Math.max(0, pageSize.width - width))
     const y = clamp(pt.y - height / 2, 0, Math.max(0, pageSize.height - height))
-    patchCanvas(activeId, { page: pageNumber, x, y, width, height, placed: true })
+    const next = makePlacement(role, pageNumber, x, y)
+    updateList([...placementsRef.current, next])
+    setActiveId(next.id)
   }
 
-  function onLayerClick(e) {
-    if (interactionRef.current) return
-    placeActiveAt(e.clientX, e.clientY)
+  function onSourceDragStart(e) {
+    e.dataTransfer.setData(DRAG_TYPE, placeRole)
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
+  function onLayerDragOver(e) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragOver(true)
+  }
+
+  function onLayerDragLeave(e) {
+    if (!layerRef.current?.contains(e.relatedTarget)) setDragOver(false)
+  }
+
+  function onLayerDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    const role = e.dataTransfer.getData(DRAG_TYPE) || placeRole
+    dropAt(e.clientX, e.clientY, role)
   }
 
   function startMove(id, e) {
     e.stopPropagation()
     e.preventDefault()
-    const current = canvasesRef.current.find((c) => c.id === id)
-    if (!current?.placed || current.page !== pageNumber) return
+    const current = placementsRef.current.find((p) => p.id === id)
+    if (!current || current.page !== pageNumber) return
     const pt = clientToPdf(e.clientX, e.clientY)
     if (!pt) return
     setActiveId(id)
@@ -134,8 +140,8 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
   function startResize(id, e) {
     e.stopPropagation()
     e.preventDefault()
-    const current = canvasesRef.current.find((c) => c.id === id)
-    if (!current?.placed || current.page !== pageNumber) return
+    const current = placementsRef.current.find((p) => p.id === id)
+    if (!current || current.page !== pageNumber) return
     setActiveId(id)
     interactionRef.current = { type: 'resize', id, startX: current.x, startY: current.y }
     bindPointer()
@@ -145,7 +151,7 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
     function onMove(ev) {
       const interaction = interactionRef.current
       if (!interaction) return
-      const current = canvasesRef.current.find((c) => c.id === interaction.id)
+      const current = placementsRef.current.find((p) => p.id === interaction.id)
       if (!current) return
       const pt = clientToPdf(ev.clientX, ev.clientY)
       if (!pt) return
@@ -153,19 +159,18 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
       if (interaction.type === 'move') {
         const x = clamp(pt.x - interaction.offsetX, 0, Math.max(0, pageSize.width - current.width))
         const y = clamp(pt.y - interaction.offsetY, 0, Math.max(0, pageSize.height - current.height))
-        patchCanvas(interaction.id, { x, y, page: pageNumber, placed: true })
+        patchPlacement(interaction.id, { x, y, page: pageNumber })
         return
       }
 
       const width = clamp(pt.x - interaction.startX, MIN_W, pageSize.width - interaction.startX)
       const height = clamp(pt.y - interaction.startY, MIN_H, pageSize.height - interaction.startY)
-      patchCanvas(interaction.id, {
+      patchPlacement(interaction.id, {
         x: interaction.startX,
         y: interaction.startY,
         width,
         height,
         page: pageNumber,
-        placed: true,
       })
     }
 
@@ -194,91 +199,68 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
   if (!fileUrl) {
     return (
       <p className="rounded-md border border-border bg-input px-3 py-4 text-sm text-muted">
-        Select a PDF, then add and place as many signature canvases as you need.
+        Select a PDF, then drag the signature canvas onto it as many times as you need.
       </p>
     )
   }
 
   const pageWidth = Math.min(720, typeof window !== 'undefined' ? window.innerWidth - 96 : 720)
+  const pagePlacements = placements.filter((p) => p.page === pageNumber)
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium text-heading">Canvases</p>
-          <button
-            type="button"
-            onClick={() => addCanvas('USER')}
-            className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-[#04110f] hover:bg-accent-hover"
-          >
-            + Add canvas
-          </button>
-        </div>
+        <p className="text-sm font-medium text-heading">Signature canvas</p>
         <p className="text-xs text-muted">
-          Add any number of white canvases. Select one, then click the PDF to place it. Changing
-          one does not move the others.
+          Drag this canvas onto the PDF. Drop it again for another placement. One canvas, many
+          drops.
         </p>
 
-        <ul className="max-h-80 space-y-2 overflow-auto">
-          {canvases.map((c, index) => (
-            <li
-              key={c.id}
-              className={`rounded-md border bg-white p-2.5 ${
-                activeId === c.id ? 'border-accent ring-2 ring-accent/30' : 'border-slate-300'
-              }`}
+        <label className="block text-xs text-muted">
+          Role for next drop
+          <select
+            value={placeRole}
+            onChange={(e) => setPlaceRole(e.target.value)}
+            className="mt-1 w-full rounded-md border border-border bg-input px-2 py-1.5 text-sm text-heading"
+          >
+            <option value="USER">User</option>
+            <option value="SUPER_USER">Super User</option>
+          </select>
+        </label>
+
+        <div
+          draggable
+          onDragStart={onSourceDragStart}
+          className="cursor-grab rounded-md border-2 border-dashed border-slate-400 bg-white p-3 active:cursor-grabbing"
+          title="Drag onto the PDF"
+        >
+          <div className="mb-2 flex items-center justify-between text-xs text-slate-600">
+            <span className="font-semibold">Canvas</span>
+            <span>Drag me</span>
+          </div>
+          <div className="h-16 rounded border border-slate-300 bg-white shadow-sm" />
+        </div>
+
+        <p className="text-xs text-muted">
+          Placed: <span className="text-heading">{placements.length}</span>
+          {placements.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                updateList([])
+                setActiveId(null)
+              }}
+              className="ml-2 text-danger hover:underline"
             >
-              <button
-                type="button"
-                className="w-full text-left"
-                onClick={() => setActiveId(c.id)}
-              >
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-slate-700">
-                    Canvas {index + 1}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    {c.placed ? 'Placed' : 'Not placed'}
-                  </span>
-                </div>
-                <div className="mb-2 h-10 rounded border border-dashed border-slate-300 bg-white" />
-              </button>
-              <div className="flex items-center gap-2">
-                <select
-                  value={c.role}
-                  onChange={(e) =>
-                    patchCanvas(c.id, {
-                      role: e.target.value,
-                      label: e.target.value === 'USER' ? 'User' : 'Super User',
-                    })
-                  }
-                  className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
-                >
-                  <option value="USER">For User</option>
-                  <option value="SUPER_USER">For Super User</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => removeCanvas(c.id)}
-                  className="text-xs text-danger hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+              Clear all
+            </button>
+          ) : null}
+        </p>
       </aside>
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <p className="text-muted">
-            Active:{' '}
-            <span className="font-medium text-heading">
-              {canvases.find((c) => c.id === activeId)
-                ? `Canvas ${canvases.findIndex((c) => c.id === activeId) + 1}`
-                : 'none'}
-            </span>
-          </p>
+          <p className="text-muted">Drop the canvas on the PDF to place it.</p>
           <div className="flex items-center gap-2 text-muted">
             <button
               type="button"
@@ -305,8 +287,10 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
         <div className="overflow-auto rounded-md border border-border bg-[#0a0c10] p-3">
           <div
             ref={layerRef}
-            className="relative inline-block max-w-full cursor-crosshair"
-            onClick={onLayerClick}
+            className={`relative inline-block max-w-full ${dragOver ? 'ring-2 ring-accent' : ''}`}
+            onDragOver={onLayerDragOver}
+            onDragLeave={onLayerDragLeave}
+            onDrop={onLayerDrop}
           >
             <Document
               file={fileUrl}
@@ -329,44 +313,67 @@ export default function PdfSignaturePlacer({ file, canvases, onChange }) {
               />
             </Document>
 
-            {canvases
-              .filter((c) => c.placed && c.page === pageNumber)
-              .map((c) => {
-                const display = toDisplay(c)
-                if (!display) return null
-                const listIndex = canvases.findIndex((x) => x.id === c.id)
-                return (
-                  <div
-                    key={c.id}
-                    role="presentation"
-                    onPointerDown={(e) => startMove(c.id, e)}
-                    className={`absolute touch-none select-none border bg-white shadow-md ${
-                      activeId === c.id ? 'z-20 border-accent' : 'z-10 border-slate-400'
-                    }`}
-                    style={{
-                      left: display.x,
-                      top: display.y,
-                      width: display.width,
-                      height: display.height,
-                    }}
-                  >
-                    <span className="pointer-events-none absolute left-1 top-1 text-[10px] font-medium text-slate-500">
-                      #{listIndex + 1} · {c.role === 'USER' ? 'User' : 'SU'}
+            {pagePlacements.map((p) => {
+              const display = toDisplay(p)
+              if (!display) return null
+              const listIndex = placements.findIndex((x) => x.id === p.id)
+              return (
+                <div
+                  key={p.id}
+                  role="presentation"
+                  onPointerDown={(e) => startMove(p.id, e)}
+                  className={`absolute touch-none select-none border bg-white shadow-md ${
+                    activeId === p.id ? 'z-20 border-accent' : 'z-10 border-slate-400'
+                  }`}
+                  style={{
+                    left: display.x,
+                    top: display.y,
+                    width: display.width,
+                    height: display.height,
+                  }}
+                >
+                  <div className="pointer-events-none absolute left-1 top-1 flex items-center gap-1 text-[10px] font-medium text-slate-500">
+                    <span>
+                      #{listIndex + 1} · {p.role === 'USER' ? 'User' : 'SU'}
                     </span>
+                  </div>
+                  <div className="absolute right-1 top-1 flex gap-1">
+                    <select
+                      value={p.role}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        patchPlacement(p.id, {
+                          role: e.target.value,
+                          label: e.target.value === 'USER' ? 'User' : 'Super User',
+                        })
+                      }
+                      className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700"
+                    >
+                      <option value="USER">User</option>
+                      <option value="SUPER_USER">SU</option>
+                    </select>
                     <button
                       type="button"
-                      aria-label="Resize"
-                      onPointerDown={(e) => startResize(c.id, e)}
-                      className="absolute bottom-0 right-0 h-3.5 w-3.5 cursor-se-resize border border-slate-500 bg-white"
-                    />
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => removePlacement(p.id)}
+                      className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-danger"
+                      aria-label="Remove placement"
+                    >
+                      ×
+                    </button>
                   </div>
-                )
-              })}
+                  <button
+                    type="button"
+                    aria-label="Resize"
+                    onPointerDown={(e) => startResize(p.id, e)}
+                    className="absolute bottom-0 right-0 h-3.5 w-3.5 cursor-se-resize border border-slate-500 bg-white"
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
     </div>
   )
 }
-
-export { newCanvas }
