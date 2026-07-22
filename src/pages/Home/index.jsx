@@ -30,7 +30,14 @@ export default function Home() {
                 >
                   Open dashboard
                 </Link>
-              ) : null}
+              ) : (
+                <Link
+                  to="/user"
+                  className="inline-flex min-h-[42px] items-center justify-center rounded-md bg-accent px-[18px] font-semibold text-[#04110f] hover:bg-accent-hover"
+                >
+                  Open dashboard
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={logout}

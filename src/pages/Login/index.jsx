@@ -28,7 +28,7 @@ export default function Login() {
       if (user.role === ROLES.SUPER_USER) {
         navigate('/super-user', { replace: true })
       } else {
-        navigate('/', { replace: true })
+        navigate('/user', { replace: true })
       }
     } catch (err) {
       setError(err.message || 'Login failed')

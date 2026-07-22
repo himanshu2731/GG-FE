@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { listDocuments, listUsers, uploadDocument } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
+import PdfSignaturePlacer from '../../components/PdfSignaturePlacer'
 
 const inputClass =
   'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
@@ -10,16 +11,6 @@ const labelClass = 'mb-1.5 block text-sm font-medium text-heading'
 const emptyForm = {
   title: '',
   assigned_user_id: '',
-  signature_page: '1',
-  signature_x: '72',
-  signature_y: '72',
-  signature_width: '150',
-  signature_height: '50',
-  su_signature_page: '1',
-  su_signature_x: '72',
-  su_signature_y: '200',
-  su_signature_width: '150',
-  su_signature_height: '50',
 }
 
 export default function SuperUserDashboard() {
@@ -28,6 +19,8 @@ export default function SuperUserDashboard() {
   const [documents, setDocuments] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [file, setFile] = useState(null)
+  const [userBox, setUserBox] = useState(null)
+  const [suBox, setSuBox] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
@@ -64,6 +57,15 @@ export default function SuperUserDashboard() {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  function onFileChange(e) {
+    const next = e.target.files?.[0] || null
+    setFile(next)
+    setUserBox(null)
+    setSuBox(null)
+    setError('')
+    setSuccess('')
+  }
+
   async function handleUpload(e) {
     e.preventDefault()
     setError('')
@@ -77,21 +79,25 @@ export default function SuperUserDashboard() {
       setError('Select a user to assign')
       return
     }
+    if (!userBox || !suBox) {
+      setError('Place both User and Super User signature boxes on the PDF')
+      return
+    }
 
     const body = new FormData()
     body.append('title', form.title)
     body.append('assigned_user_id', form.assigned_user_id)
     body.append('file', file)
-    body.append('signature_page', form.signature_page)
-    body.append('signature_x', form.signature_x)
-    body.append('signature_y', form.signature_y)
-    body.append('signature_width', form.signature_width)
-    body.append('signature_height', form.signature_height)
-    body.append('su_signature_page', form.su_signature_page)
-    body.append('su_signature_x', form.su_signature_x)
-    body.append('su_signature_y', form.su_signature_y)
-    body.append('su_signature_width', form.su_signature_width)
-    body.append('su_signature_height', form.su_signature_height)
+    body.append('signature_page', String(userBox.page))
+    body.append('signature_x', String(userBox.x))
+    body.append('signature_y', String(userBox.y))
+    body.append('signature_width', String(userBox.width))
+    body.append('signature_height', String(userBox.height))
+    body.append('su_signature_page', String(suBox.page))
+    body.append('su_signature_x', String(suBox.x))
+    body.append('su_signature_y', String(suBox.y))
+    body.append('su_signature_width', String(suBox.width))
+    body.append('su_signature_height', String(suBox.height))
 
     setLoading(true)
     try {
@@ -99,6 +105,8 @@ export default function SuperUserDashboard() {
       setSuccess('Document uploaded and assigned')
       setForm(emptyForm)
       setFile(null)
+      setUserBox(null)
+      setSuBox(null)
       e.target.reset()
       await loadLists()
     } catch (err) {
@@ -134,12 +142,13 @@ export default function SuperUserDashboard() {
       <section className="mb-8 rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
         <h2 className="mb-4 text-lg font-semibold text-heading">Upload & assign PDF</h2>
         <p className="mb-5 text-sm text-body">
-          Upload a PDF, set User and Super User signature coordinates, and assign it to a
-          User. You can assign multiple documents to the same user.
+          Open the PDF, then drag the <span className="text-emerald-300">User</span> and{' '}
+          <span className="text-sky-300">Super User</span> signature canvases onto the signature
+          fields. Each canvas is clearly labeled by role; coordinates are saved automatically.
         </p>
 
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleUpload}>
-          <div className="md:col-span-2">
+        <form className="grid gap-4" onSubmit={handleUpload}>
+          <div>
             <label className={labelClass} htmlFor="title">
               Title
             </label>
@@ -153,7 +162,7 @@ export default function SuperUserDashboard() {
             />
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <label className={labelClass} htmlFor="assigned_user_id">
               Assign to user
             </label>
@@ -178,7 +187,7 @@ export default function SuperUserDashboard() {
             ) : null}
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <label className={labelClass} htmlFor="file">
               PDF file
             </label>
@@ -187,181 +196,36 @@ export default function SuperUserDashboard() {
               type="file"
               accept="application/pdf,.pdf"
               required
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={onFileChange}
               className="w-full text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-2 file:font-semibold file:text-[#04110f]"
             />
           </div>
 
-          <fieldset className="rounded-md border border-border p-4 md:col-span-1">
-            <legend className="px-1 text-sm font-semibold text-heading">User signature</legend>
-            <div className="mt-2 grid gap-3">
-              <div>
-                <label className={labelClass} htmlFor="signature_page">
-                  Page
-                </label>
-                <input
-                  id="signature_page"
-                  type="number"
-                  min="1"
-                  required
-                  value={form.signature_page}
-                  onChange={(e) => updateField('signature_page', e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass} htmlFor="signature_x">
-                    X
-                  </label>
-                  <input
-                    id="signature_x"
-                    type="number"
-                    step="any"
-                    required
-                    value={form.signature_x}
-                    onChange={(e) => updateField('signature_x', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="signature_y">
-                    Y
-                  </label>
-                  <input
-                    id="signature_y"
-                    type="number"
-                    step="any"
-                    required
-                    value={form.signature_y}
-                    onChange={(e) => updateField('signature_y', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass} htmlFor="signature_width">
-                    Width
-                  </label>
-                  <input
-                    id="signature_width"
-                    type="number"
-                    step="any"
-                    value={form.signature_width}
-                    onChange={(e) => updateField('signature_width', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="signature_height">
-                    Height
-                  </label>
-                  <input
-                    id="signature_height"
-                    type="number"
-                    step="any"
-                    value={form.signature_height}
-                    onChange={(e) => updateField('signature_height', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            </div>
-          </fieldset>
-
-          <fieldset className="rounded-md border border-border p-4 md:col-span-1">
-            <legend className="px-1 text-sm font-semibold text-heading">
-              Super User signature
-            </legend>
-            <div className="mt-2 grid gap-3">
-              <div>
-                <label className={labelClass} htmlFor="su_signature_page">
-                  Page
-                </label>
-                <input
-                  id="su_signature_page"
-                  type="number"
-                  min="1"
-                  required
-                  value={form.su_signature_page}
-                  onChange={(e) => updateField('su_signature_page', e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass} htmlFor="su_signature_x">
-                    X
-                  </label>
-                  <input
-                    id="su_signature_x"
-                    type="number"
-                    step="any"
-                    required
-                    value={form.su_signature_x}
-                    onChange={(e) => updateField('su_signature_x', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="su_signature_y">
-                    Y
-                  </label>
-                  <input
-                    id="su_signature_y"
-                    type="number"
-                    step="any"
-                    required
-                    value={form.su_signature_y}
-                    onChange={(e) => updateField('su_signature_y', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass} htmlFor="su_signature_width">
-                    Width
-                  </label>
-                  <input
-                    id="su_signature_width"
-                    type="number"
-                    step="any"
-                    value={form.su_signature_width}
-                    onChange={(e) => updateField('su_signature_width', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="su_signature_height">
-                    Height
-                  </label>
-                  <input
-                    id="su_signature_height"
-                    type="number"
-                    step="any"
-                    value={form.su_signature_height}
-                    onChange={(e) => updateField('su_signature_height', e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            </div>
-          </fieldset>
+          <div>
+            <p className={`${labelClass} mb-2`}>Signature placement</p>
+            <PdfSignaturePlacer
+              file={file}
+              userBox={userBox}
+              suBox={suBox}
+              onChange={({ userBox: nextUser, suBox: nextSu }) => {
+                setUserBox(nextUser)
+                setSuBox(nextSu)
+              }}
+            />
+          </div>
 
           {error ? (
-            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger md:col-span-2">
+            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
               {error}
             </p>
           ) : null}
           {success ? (
-            <p className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent md:col-span-2">
+            <p className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
               {success}
             </p>
           ) : null}
 
-          <div className="md:col-span-2">
+          <div>
             <button
               type="submit"
               disabled={loading}
@@ -392,7 +256,10 @@ export default function SuperUserDashboard() {
         ) : (
           <ul className="divide-y divide-border">
             {documents.map((doc) => (
-              <li key={doc.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <li
+                key={doc.id}
+                className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div>
                   <p className="font-medium text-heading">{doc.title}</p>
                   <p className="text-sm text-muted">
@@ -400,14 +267,22 @@ export default function SuperUserDashboard() {
                     {doc.status}
                   </p>
                 </div>
-                <a
-                  href={doc.file_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm text-accent hover:text-accent-hover"
-                >
-                  Open PDF
-                </a>
+                <div className="flex gap-3">
+                  <Link
+                    to={`/documents/${doc.id}`}
+                    className="text-sm text-accent hover:text-accent-hover"
+                  >
+                    View canvases
+                  </Link>
+                  <a
+                    href={doc.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-muted hover:text-body"
+                  >
+                    Open PDF
+                  </a>
+                </div>
               </li>
             ))}
           </ul>

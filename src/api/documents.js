@@ -13,9 +13,22 @@ export function listDocuments(params = {}) {
   return request(`/documents${qs ? `?${qs}` : ''}`)
 }
 
+export function getDocument(id) {
+  return request(`/documents/${id}`)
+}
+
 export function uploadDocument(formData) {
   return request('/documents/upload', {
     method: 'POST',
     body: formData,
+  })
+}
+
+export function userSignDocument(id, signatureBlob) {
+  const body = new FormData()
+  body.append('signature', signatureBlob, 'signature.png')
+  return request(`/documents/${id}/user-sign`, {
+    method: 'POST',
+    body,
   })
 }
