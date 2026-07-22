@@ -55,17 +55,10 @@ export default function DocumentSign() {
     try {
       const blob = await (await fetch(dataUrl)).blob()
       const res = await userSignDocument(id, blob)
-      setSuccess(`Signed successfully · status ${res.status}`)
-      setDoc((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: res.status,
-              file_url: res.file_url,
-              user_signed_at: res.user_signed_at,
-            }
-          : prev,
-      )
+      // Reload full document so both User and Super User see the stamped PDF URL.
+      const fresh = await getDocument(id)
+      setDoc(fresh)
+      setSuccess(`Signed successfully · status ${res.status || fresh.status}`)
       signaturePadsRef.current?.clearAll?.()
     } catch (err) {
       setError(err.message || 'Sign failed')
@@ -110,18 +103,21 @@ export default function DocumentSign() {
         <p className="text-sm text-muted">Loading document…</p>
       ) : doc ? (
         <>
-          {isUser ? (
+          {canUserSign ? (
             <p className="mb-3 text-sm text-body">
-              Draw on any User canvas. Super User canvases stay disabled. One signature is stamped
-              onto every User area.
+              Draw on a User canvas, then submit. Your signature is stamped into the PDF for you and
+              the Super User to view.
+            </p>
+          ) : doc.status === 'USER_SIGNED' ? (
+            <p className="mb-3 text-sm text-body">
+              User signature is baked into the PDF below. Open or refresh to see the updated file.
             </p>
           ) : (
-            <p className="mb-3 text-sm text-body">
-              All placed canvases are shown. Super User areas are reference-only here.
-            </p>
+            <p className="mb-3 text-sm text-body">Document status: {doc.status}</p>
           )}
 
           <PdfRoleCanvases
+            key={`${doc.id}-${doc.file_url}-${doc.status}`}
             fileUrl={doc.file_url}
             document={doc}
             viewerRole={viewerRole}

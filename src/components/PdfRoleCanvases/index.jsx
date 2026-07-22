@@ -38,8 +38,9 @@ function legacyPlacements(doc) {
 }
 
 /**
- * Renders all signature placements from the document.
- * USER canvases are active for signing; SUPER_USER canvases are disabled for users.
+ * While awaiting user sign: show drawable USER canvases.
+ * After user sign: hide USER overlays so the stamped PDF ink is visible.
+ * SUPER_USER guides stay visible until SU has signed (when that flow exists).
  */
 export default function PdfRoleCanvases({
   fileUrl,
@@ -60,8 +61,18 @@ export default function PdfRoleCanvases({
     return legacyPlacements(doc)
   }, [doc])
 
-  const userActive = activeRole === 'USER'
-  const showSuCanvas = viewerRole === 'SUPER_USER'
+  const status = doc?.status || ''
+  const awaitingUserSign = status === 'UPLOADED'
+  const userSigned = status === 'USER_SIGNED' || status === 'SU_SIGNED' || status === 'VERIFIED'
+  const userActive = activeRole === 'USER' && awaitingUserSign
+  const showSuGuides = viewerRole === 'SUPER_USER' && status !== 'SU_SIGNED' && status !== 'VERIFIED'
+
+  const pdfSrc = useMemo(() => {
+    if (!fileUrl) return null
+    const stamp = doc?.file_updated_at || doc?.user_signed_at || doc?.updated_at || ''
+    const join = fileUrl.includes('?') ? '&' : '?'
+    return stamp ? `${fileUrl}${join}v=${encodeURIComponent(stamp)}` : fileUrl
+  }, [fileUrl, doc?.file_updated_at, doc?.user_signed_at, doc?.updated_at])
 
   useEffect(() => {
     const firstUser = placements.find((p) => p.role === 'USER')
@@ -105,24 +116,36 @@ export default function PdfRoleCanvases({
     else delete padRefs.current[id]
   }
 
-  if (!fileUrl || !doc) {
+  if (!pdfSrc || !doc) {
     return <p className="text-sm text-muted">No document loaded.</p>
   }
 
   const visible = placements.filter((p) => {
     if (p.page !== pageNumber) return false
-    if (p.role === 'SUPER_USER' && !showSuCanvas) return false
-    return true
+    if (p.role === 'USER') {
+      // Only overlay USER areas while signing — after that, ink is in the PDF.
+      return userActive || (awaitingUserSign && viewerRole === 'SUPER_USER')
+    }
+    if (p.role === 'SUPER_USER') return showSuGuides
+    return false
   })
+
+  let hint = 'Viewing document.'
+  if (userActive) {
+    hint = 'Draw on any User canvas. Your signature is stamped into the PDF on submit.'
+  } else if (userSigned) {
+    hint =
+      viewerRole === 'SUPER_USER'
+        ? 'User signature is on the PDF. Super User area is marked until you sign.'
+        : 'Your signature is on the PDF below.'
+  } else if (viewerRole === 'SUPER_USER') {
+    hint = 'Preview of placed canvases before the user signs.'
+  }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <p className="text-muted">
-          {viewerRole === 'USER'
-            ? 'Draw on any User canvas. The same signature is applied to all User areas.'
-            : `${placements.length} canvas${placements.length === 1 ? '' : 'es'} on this document.`}
-        </p>
+        <p className="text-muted">{hint}</p>
         <div className="flex items-center gap-2 text-muted">
           <button
             type="button"
@@ -149,7 +172,8 @@ export default function PdfRoleCanvases({
       <div className="overflow-auto rounded-md border border-border bg-[#0a0c10] p-3">
         <div ref={layerRef} className="relative inline-block max-w-full">
           <Document
-            file={fileUrl}
+            key={pdfSrc}
+            file={pdfSrc}
             loading={<p className="p-4 text-sm text-muted">Loading PDF…</p>}
             onLoadSuccess={({ numPages: n }) => setNumPages(n)}
           >
@@ -204,7 +228,7 @@ export default function PdfRoleCanvases({
               return (
                 <div
                   key={p.id || `user-${index}`}
-                  className="pointer-events-none absolute z-10 overflow-hidden border border-slate-400 bg-white shadow-md"
+                  className="pointer-events-none absolute z-10 overflow-hidden border border-dashed border-slate-300 bg-white/40"
                   style={{
                     left: display.x,
                     top: display.y,
@@ -212,8 +236,8 @@ export default function PdfRoleCanvases({
                     height: display.height,
                   }}
                 >
-                  <div className="flex h-full items-center justify-center text-[11px] text-slate-400">
-                    {label}
+                  <div className="flex h-full items-center justify-center text-[10px] text-slate-500">
+                    {label} (awaiting)
                   </div>
                 </div>
               )
@@ -222,7 +246,7 @@ export default function PdfRoleCanvases({
             return (
               <div
                 key={p.id || `su-${index}`}
-                className="pointer-events-none absolute z-10 overflow-hidden border border-dashed border-slate-300 bg-white/70 opacity-60"
+                className="pointer-events-none absolute z-10 overflow-hidden border border-dashed border-slate-300 bg-white/50"
                 style={{
                   left: display.x,
                   top: display.y,
@@ -230,8 +254,8 @@ export default function PdfRoleCanvases({
                   height: display.height,
                 }}
               >
-                <div className="flex h-full items-center justify-center text-[10px] text-slate-400">
-                  {label} (disabled)
+                <div className="flex h-full items-center justify-center text-[10px] text-slate-500">
+                  {label} (pending)
                 </div>
               </div>
             )
