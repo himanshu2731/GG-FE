@@ -13,7 +13,7 @@ export default function DocumentSign() {
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const signatureRef = useRef(null)
+  const signaturePadsRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -45,14 +45,14 @@ export default function DocumentSign() {
   async function handleSign() {
     setError('')
     setSuccess('')
-    if (!signatureRef.current || signatureRef.current.isEmpty()) {
-      setError('Draw your signature in the USER canvas area')
+    const dataUrl = signaturePadsRef.current?.firstDrawnDataUrl?.()
+    if (!dataUrl) {
+      setError('Draw your signature in a User canvas area')
       return
     }
 
     setSubmitting(true)
     try {
-      const dataUrl = signatureRef.current.toDataURL('image/png')
       const blob = await (await fetch(dataUrl)).blob()
       const res = await userSignDocument(id, blob)
       setSuccess(`Signed successfully · status ${res.status}`)
@@ -66,7 +66,7 @@ export default function DocumentSign() {
             }
           : prev,
       )
-      signatureRef.current.clear()
+      signaturePadsRef.current?.clearAll?.()
     } catch (err) {
       setError(err.message || 'Sign failed')
     } finally {
@@ -112,13 +112,12 @@ export default function DocumentSign() {
         <>
           {isUser ? (
             <p className="mb-3 text-sm text-body">
-              Only the <span className="text-emerald-300">USER</span> canvas is active. You cannot
-              sign in the Super User area.
+              Draw on any User canvas. Super User canvases stay disabled. One signature is stamped
+              onto every User area.
             </p>
           ) : (
             <p className="mb-3 text-sm text-body">
-              Both <span className="text-emerald-300">USER</span> and{' '}
-              <span className="text-sky-300">SUPER USER</span> canvas areas are visible.
+              All placed canvases are shown. Super User areas are reference-only here.
             </p>
           )}
 
@@ -127,14 +126,14 @@ export default function DocumentSign() {
             document={doc}
             viewerRole={viewerRole}
             activeRole={activeRole}
-            signatureRef={signatureRef}
+            signaturePadsRef={signaturePadsRef}
           />
 
           {canUserSign ? (
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => signatureRef.current?.clear()}
+                onClick={() => signaturePadsRef.current?.clearAll?.()}
                 className="rounded-md border border-border-strong px-4 py-2 text-sm font-semibold text-heading"
               >
                 Clear signature

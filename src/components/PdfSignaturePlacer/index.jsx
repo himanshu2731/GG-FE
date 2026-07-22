@@ -7,117 +7,49 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString()
 
 const DEFAULT_BOX = { width: 180, height: 70 }
-
-const ROLE = {
-  user: {
-    key: 'user',
-    title: 'User signature',
-    short: 'USER',
-    hint: 'Assigned user will sign here',
-    border: 'border-emerald-400',
-    bg: 'bg-emerald-500/10',
-    badge: 'bg-emerald-500 text-[#04110f]',
-    ring: 'ring-emerald-400/50',
-    canvasBg: 'bg-white',
-    label: 'text-emerald-300',
-  },
-  su: {
-    key: 'su',
-    title: 'Super User signature',
-    short: 'SUPER USER',
-    hint: 'You will sign here later',
-    border: 'border-sky-400',
-    bg: 'bg-sky-500/10',
-    badge: 'bg-sky-400 text-[#04110f]',
-    ring: 'ring-sky-400/50',
-    canvasBg: 'bg-white',
-    label: 'text-sky-300',
-  },
-}
+const MIN_W = 80
+const MIN_H = 40
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n))
 }
 
-function PlacedCanvas({ displayBox, role, selected, onPointerDown }) {
-  const style = ROLE[role]
-  if (!displayBox) return null
-
-  return (
-    <div
-      role="presentation"
-      onPointerDown={onPointerDown}
-      className={`absolute touch-none select-none overflow-hidden rounded-md border-2 shadow-lg ring-2 ${style.border} ${style.ring} ${
-        selected ? 'z-20' : 'z-10'
-      }`}
-      style={{
-        left: displayBox.x,
-        top: displayBox.y,
-        width: displayBox.width,
-        height: displayBox.height,
-      }}
-    >
-      <div className={`flex h-full flex-col ${style.canvasBg}`}>
-        <div className={`flex items-center justify-between px-1.5 py-0.5 ${style.bg}`}>
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide ${style.badge}`}>
-            {style.short}
-          </span>
-          <span className="text-[9px] font-medium text-slate-600">signature canvas</span>
-        </div>
-        <div className="relative min-h-0 flex-1">
-          <canvas
-            width={Math.max(1, Math.round(displayBox.width))}
-            height={Math.max(1, Math.round(displayBox.height - 18))}
-            className="pointer-events-none h-full w-full bg-[linear-gradient(45deg,#f8fafc_25%,transparent_25%),linear-gradient(-45deg,#f8fafc_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f8fafc_75%),linear-gradient(-45deg,transparent_75%,#f8fafc_75%)] bg-[length:12px_12px] bg-[position:0_0,0_6px,6px_-6px,-6px_0]"
-          />
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] font-semibold text-slate-400">
-            {style.title}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
+function newCanvas(role = 'USER') {
+  return {
+    id: crypto.randomUUID(),
+    role,
+    page: 1,
+    x: 72,
+    y: 72,
+    width: DEFAULT_BOX.width,
+    height: DEFAULT_BOX.height,
+    placed: false,
+    label: role === 'USER' ? 'User' : 'Super User',
+  }
 }
 
-function PaletteCard({ role, placed, active, onSelect, onDragStart }) {
-  const style = ROLE[role]
-  return (
-    <button
-      type="button"
-      draggable
-      onDragStart={(e) => onDragStart(e, role)}
-      onClick={() => onSelect(role)}
-      className={`w-full rounded-lg border-2 p-3 text-left transition ${style.border} ${style.bg} ${
-        active ? `ring-2 ${style.ring}` : ''
-      }`}
-    >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className={`rounded px-2 py-0.5 text-[11px] font-bold ${style.badge}`}>
-          {style.short}
-        </span>
-        <span className="text-[11px] text-muted">{placed ? 'Placed — drag to move' : 'Drag onto PDF'}</span>
-      </div>
-      <div className={`h-14 rounded border border-dashed ${style.border} bg-white/95`}>
-        <p className="flex h-full items-center justify-center text-xs font-semibold text-slate-500">
-          {style.title} canvas
-        </p>
-      </div>
-      <p className={`mt-2 text-xs ${style.label}`}>{style.hint}</p>
-    </button>
-  )
-}
-
-export default function PdfSignaturePlacer({ file, userBox, suBox, onChange }) {
+/**
+ * Super User can add as many white canvases as needed.
+ * Select one, place/move/resize on the PDF; others stay put.
+ */
+export default function PdfSignaturePlacer({ file, canvases, onChange }) {
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 })
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 })
-  const [active, setActive] = useState('user')
+  const [activeId, setActiveId] = useState(canvases[0]?.id || null)
   const layerRef = useRef(null)
-  const boxesRef = useRef({ userBox, suBox })
-  const dragRef = useRef(null)
+  const canvasesRef = useRef(canvases)
+  const interactionRef = useRef(null)
 
-  boxesRef.current = { userBox, suBox }
+  canvasesRef.current = canvases
+
+  useEffect(() => {
+    if (!activeId && canvases[0]) setActiveId(canvases[0].id)
+    if (activeId && !canvases.find((c) => c.id === activeId)) {
+      setActiveId(canvases[0]?.id || null)
+    }
+  }, [canvases, activeId])
 
   const fileUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
 
@@ -134,99 +66,111 @@ export default function PdfSignaturePlacer({ file, userBox, suBox, onChange }) {
     setDisplaySize({ width: 0, height: 0 })
   }, [fileUrl])
 
-  function commit(nextUser, nextSu) {
-    onChange({ userBox: nextUser, suBox: nextSu })
+  function updateList(next) {
+    onChange(next)
   }
 
-  function placeAtPdfCoords(pdfX, pdfY, kind) {
-    if (!pageSize.width) return
-    const width = DEFAULT_BOX.width
-    const height = DEFAULT_BOX.height
-    const x = clamp(pdfX - width / 2, 0, Math.max(0, pageSize.width - width))
-    const y = clamp(pdfY - height / 2, 0, Math.max(0, pageSize.height - height))
-    const next = { page: pageNumber, x, y, width, height }
-    const { userBox: u, suBox: s } = boxesRef.current
-    if (kind === 'user') commit(next, s)
-    else commit(u, next)
+  function patchCanvas(id, patch) {
+    updateList(canvasesRef.current.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  }
+
+  function addCanvas(role = 'USER') {
+    const c = newCanvas(role)
+    const next = [...canvasesRef.current, c]
+    updateList(next)
+    setActiveId(c.id)
+  }
+
+  function removeCanvas(id) {
+    updateList(canvasesRef.current.filter((c) => c.id !== id))
   }
 
   function clientToPdf(clientX, clientY) {
     const layer = layerRef.current
     if (!layer || !pageSize.width) return null
     const rect = layer.getBoundingClientRect()
-    const scaleX = pageSize.width / rect.width
-    const scaleY = pageSize.height / rect.height
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
-      rect,
-      scaleX,
-      scaleY,
+      x: ((clientX - rect.left) * pageSize.width) / rect.width,
+      y: ((clientY - rect.top) * pageSize.height) / rect.height,
     }
+  }
+
+  function placeActiveAt(clientX, clientY) {
+    if (!activeId) return
+    const current = canvasesRef.current.find((c) => c.id === activeId)
+    if (!current) return
+    const pt = clientToPdf(clientX, clientY)
+    if (!pt) return
+
+    const width = current.width || DEFAULT_BOX.width
+    const height = current.height || DEFAULT_BOX.height
+    const x = clamp(pt.x - width / 2, 0, Math.max(0, pageSize.width - width))
+    const y = clamp(pt.y - height / 2, 0, Math.max(0, pageSize.height - height))
+    patchCanvas(activeId, { page: pageNumber, x, y, width, height, placed: true })
   }
 
   function onLayerClick(e) {
-    if (dragRef.current) return
-    const pt = clientToPdf(e.clientX, e.clientY)
-    if (!pt) return
-    placeAtPdfCoords(pt.x, pt.y, active)
+    if (interactionRef.current) return
+    placeActiveAt(e.clientX, e.clientY)
   }
 
-  function onPaletteDragStart(e, role) {
-    e.dataTransfer.setData('application/x-sig-role', role)
-    e.dataTransfer.effectAllowed = 'copy'
-    setActive(role)
-  }
-
-  function onPdfDragOver(e) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
-  }
-
-  function onPdfDrop(e) {
-    e.preventDefault()
-    const role = e.dataTransfer.getData('application/x-sig-role')
-    if (role !== 'user' && role !== 'su') return
-    const pt = clientToPdf(e.clientX, e.clientY)
-    if (!pt) return
-    setActive(role)
-    placeAtPdfCoords(pt.x, pt.y, role)
-  }
-
-  function startMove(kind, e) {
+  function startMove(id, e) {
     e.stopPropagation()
     e.preventDefault()
-    const box = kind === 'user' ? boxesRef.current.userBox : boxesRef.current.suBox
-    if (!box || box.page !== pageNumber) return
-
+    const current = canvasesRef.current.find((c) => c.id === id)
+    if (!current?.placed || current.page !== pageNumber) return
     const pt = clientToPdf(e.clientX, e.clientY)
     if (!pt) return
-
-    dragRef.current = {
-      kind,
-      offsetX: pt.x - box.x,
-      offsetY: pt.y - box.y,
+    setActiveId(id)
+    interactionRef.current = {
+      type: 'move',
+      id,
+      offsetX: pt.x - current.x,
+      offsetY: pt.y - current.y,
     }
-    setActive(kind)
+    bindPointer()
+  }
 
+  function startResize(id, e) {
+    e.stopPropagation()
+    e.preventDefault()
+    const current = canvasesRef.current.find((c) => c.id === id)
+    if (!current?.placed || current.page !== pageNumber) return
+    setActiveId(id)
+    interactionRef.current = { type: 'resize', id, startX: current.x, startY: current.y }
+    bindPointer()
+  }
+
+  function bindPointer() {
     function onMove(ev) {
-      const drag = dragRef.current
-      if (!drag) return
-      const p = clientToPdf(ev.clientX, ev.clientY)
-      if (!p) return
-      const current = drag.kind === 'user' ? boxesRef.current.userBox : boxesRef.current.suBox
+      const interaction = interactionRef.current
+      if (!interaction) return
+      const current = canvasesRef.current.find((c) => c.id === interaction.id)
       if (!current) return
+      const pt = clientToPdf(ev.clientX, ev.clientY)
+      if (!pt) return
 
-      const x = clamp(p.x - drag.offsetX, 0, Math.max(0, pageSize.width - current.width))
-      const y = clamp(p.y - drag.offsetY, 0, Math.max(0, pageSize.height - current.height))
-      const next = { ...current, page: pageNumber, x, y }
-      const { userBox: u, suBox: s } = boxesRef.current
-      if (drag.kind === 'user') commit(next, s)
-      else commit(u, next)
+      if (interaction.type === 'move') {
+        const x = clamp(pt.x - interaction.offsetX, 0, Math.max(0, pageSize.width - current.width))
+        const y = clamp(pt.y - interaction.offsetY, 0, Math.max(0, pageSize.height - current.height))
+        patchCanvas(interaction.id, { x, y, page: pageNumber, placed: true })
+        return
+      }
+
+      const width = clamp(pt.x - interaction.startX, MIN_W, pageSize.width - interaction.startX)
+      const height = clamp(pt.y - interaction.startY, MIN_H, pageSize.height - interaction.startY)
+      patchCanvas(interaction.id, {
+        x: interaction.startX,
+        y: interaction.startY,
+        width,
+        height,
+        page: pageNumber,
+        placed: true,
+      })
     }
 
     function onUp() {
-      dragRef.current = null
+      interactionRef.current = null
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
@@ -235,22 +179,22 @@ export default function PdfSignaturePlacer({ file, userBox, suBox, onChange }) {
     window.addEventListener('pointerup', onUp)
   }
 
-  function toDisplay(box) {
-    if (!box || !pageSize.width || !displaySize.width) return null
+  function toDisplay(b) {
+    if (!b || !pageSize.width || !displaySize.width) return null
     const scaleX = displaySize.width / pageSize.width
     const scaleY = displaySize.height / pageSize.height
     return {
-      x: box.x * scaleX,
-      y: box.y * scaleY,
-      width: box.width * scaleX,
-      height: box.height * scaleY,
+      x: b.x * scaleX,
+      y: b.y * scaleY,
+      width: b.width * scaleX,
+      height: b.height * scaleY,
     }
   }
 
   if (!fileUrl) {
     return (
       <p className="rounded-md border border-border bg-input px-3 py-4 text-sm text-muted">
-        Select a PDF first. Then drag the User and Super User canvases onto the signature fields.
+        Select a PDF, then add and place as many signature canvases as you need.
       </p>
     )
   }
@@ -258,38 +202,84 @@ export default function PdfSignaturePlacer({ file, userBox, suBox, onChange }) {
   const pageWidth = Math.min(720, typeof window !== 'undefined' ? window.innerWidth - 96 : 720)
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+    <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
       <aside className="space-y-3">
-        <p className="text-sm font-medium text-heading">Signature canvases</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium text-heading">Canvases</p>
+          <button
+            type="button"
+            onClick={() => addCanvas('USER')}
+            className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-[#04110f] hover:bg-accent-hover"
+          >
+            + Add canvas
+          </button>
+        </div>
         <p className="text-xs text-muted">
-          Drag a canvas onto the PDF (or select one and click the page). Each role has its own
-          canvas.
+          Add any number of white canvases. Select one, then click the PDF to place it. Changing
+          one does not move the others.
         </p>
-        <PaletteCard
-          role="user"
-          placed={Boolean(userBox)}
-          active={active === 'user'}
-          onSelect={setActive}
-          onDragStart={onPaletteDragStart}
-        />
-        <PaletteCard
-          role="su"
-          placed={Boolean(suBox)}
-          active={active === 'su'}
-          onSelect={setActive}
-          onDragStart={onPaletteDragStart}
-        />
+
+        <ul className="max-h-80 space-y-2 overflow-auto">
+          {canvases.map((c, index) => (
+            <li
+              key={c.id}
+              className={`rounded-md border bg-white p-2.5 ${
+                activeId === c.id ? 'border-accent ring-2 ring-accent/30' : 'border-slate-300'
+              }`}
+            >
+              <button
+                type="button"
+                className="w-full text-left"
+                onClick={() => setActiveId(c.id)}
+              >
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-slate-700">
+                    Canvas {index + 1}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {c.placed ? 'Placed' : 'Not placed'}
+                  </span>
+                </div>
+                <div className="mb-2 h-10 rounded border border-dashed border-slate-300 bg-white" />
+              </button>
+              <div className="flex items-center gap-2">
+                <select
+                  value={c.role}
+                  onChange={(e) =>
+                    patchCanvas(c.id, {
+                      role: e.target.value,
+                      label: e.target.value === 'USER' ? 'User' : 'Super User',
+                    })
+                  }
+                  className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+                >
+                  <option value="USER">For User</option>
+                  <option value="SUPER_USER">For Super User</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeCanvas(c.id)}
+                  className="text-xs text-danger hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       </aside>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <p className="text-muted">
             Active:{' '}
-            <span className={active === 'user' ? ROLE.user.label : ROLE.su.label}>
-              {ROLE[active].title}
+            <span className="font-medium text-heading">
+              {canvases.find((c) => c.id === activeId)
+                ? `Canvas ${canvases.findIndex((c) => c.id === activeId) + 1}`
+                : 'none'}
             </span>
           </p>
-          <div className="flex items-center gap-2 text-sm text-muted">
+          <div className="flex items-center gap-2 text-muted">
             <button
               type="button"
               disabled={pageNumber <= 1}
@@ -312,11 +302,7 @@ export default function PdfSignaturePlacer({ file, userBox, suBox, onChange }) {
           </div>
         </div>
 
-        <div
-          className="overflow-auto rounded-md border border-border bg-[#0a0c10] p-3"
-          onDragOver={onPdfDragOver}
-          onDrop={onPdfDrop}
-        >
+        <div className="overflow-auto rounded-md border border-border bg-[#0a0c10] p-3">
           <div
             ref={layerRef}
             className="relative inline-block max-w-full cursor-crosshair"
@@ -332,9 +318,7 @@ export default function PdfSignaturePlacer({ file, userBox, suBox, onChange }) {
                 width={pageWidth}
                 onRenderSuccess={() => {
                   const el = layerRef.current?.querySelector('.react-pdf__Page')
-                  if (el) {
-                    setDisplaySize({ width: el.clientWidth, height: el.clientHeight })
-                  }
+                  if (el) setDisplaySize({ width: el.clientWidth, height: el.clientHeight })
                 }}
                 onLoadSuccess={(page) => {
                   const viewport = page.getViewport({ scale: 1 })
@@ -345,36 +329,44 @@ export default function PdfSignaturePlacer({ file, userBox, suBox, onChange }) {
               />
             </Document>
 
-            <PlacedCanvas
-              role="user"
-              selected={active === 'user'}
-              displayBox={userBox?.page === pageNumber ? toDisplay(userBox) : null}
-              onPointerDown={(e) => startMove('user', e)}
-            />
-            <PlacedCanvas
-              role="su"
-              selected={active === 'su'}
-              displayBox={suBox?.page === pageNumber ? toDisplay(suBox) : null}
-              onPointerDown={(e) => startMove('su', e)}
-            />
+            {canvases
+              .filter((c) => c.placed && c.page === pageNumber)
+              .map((c) => {
+                const display = toDisplay(c)
+                if (!display) return null
+                const listIndex = canvases.findIndex((x) => x.id === c.id)
+                return (
+                  <div
+                    key={c.id}
+                    role="presentation"
+                    onPointerDown={(e) => startMove(c.id, e)}
+                    className={`absolute touch-none select-none border bg-white shadow-md ${
+                      activeId === c.id ? 'z-20 border-accent' : 'z-10 border-slate-400'
+                    }`}
+                    style={{
+                      left: display.x,
+                      top: display.y,
+                      width: display.width,
+                      height: display.height,
+                    }}
+                  >
+                    <span className="pointer-events-none absolute left-1 top-1 text-[10px] font-medium text-slate-500">
+                      #{listIndex + 1} · {c.role === 'USER' ? 'User' : 'SU'}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Resize"
+                      onPointerDown={(e) => startResize(c.id, e)}
+                      className="absolute bottom-0 right-0 h-3.5 w-3.5 cursor-se-resize border border-slate-500 bg-white"
+                    />
+                  </div>
+                )
+              })}
           </div>
-        </div>
-
-        <div className="grid gap-2 text-xs sm:grid-cols-2">
-          <p className={ROLE.user.label}>
-            USER canvas:{' '}
-            {userBox
-              ? `page ${userBox.page} · (${Math.round(userBox.x)}, ${Math.round(userBox.y)})`
-              : 'not placed'}
-          </p>
-          <p className={ROLE.su.label}>
-            SUPER USER canvas:{' '}
-            {suBox
-              ? `page ${suBox.page} · (${Math.round(suBox.x)}, ${Math.round(suBox.y)})`
-              : 'not placed'}
-          </p>
         </div>
       </div>
     </div>
   )
 }
+
+export { newCanvas }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { listDocuments, listUsers, uploadDocument } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
-import PdfSignaturePlacer from '../../components/PdfSignaturePlacer'
+import PdfSignaturePlacer, { newCanvas } from '../../components/PdfSignaturePlacer'
 
 const inputClass =
   'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
@@ -19,8 +19,7 @@ export default function SuperUserDashboard() {
   const [documents, setDocuments] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [file, setFile] = useState(null)
-  const [userBox, setUserBox] = useState(null)
-  const [suBox, setSuBox] = useState(null)
+  const [canvases, setCanvases] = useState(() => [newCanvas('USER')])
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
@@ -60,8 +59,7 @@ export default function SuperUserDashboard() {
   function onFileChange(e) {
     const next = e.target.files?.[0] || null
     setFile(next)
-    setUserBox(null)
-    setSuBox(null)
+    setCanvases([newCanvas('USER')])
     setError('')
     setSuccess('')
   }
@@ -79,25 +77,36 @@ export default function SuperUserDashboard() {
       setError('Select a user to assign')
       return
     }
-    if (!userBox || !suBox) {
-      setError('Place both User and Super User signature boxes on the PDF')
+    if (canvases.length === 0) {
+      setError('Add at least one signature canvas')
       return
     }
+    const unplaced = canvases.filter((c) => !c.placed)
+    if (unplaced.length > 0) {
+      setError('Place every canvas on the PDF before uploading')
+      return
+    }
+    if (!canvases.some((c) => c.role === 'USER')) {
+      setError('At least one canvas must be assigned to the User')
+      return
+    }
+
+    const placements = canvases.map((c) => ({
+      id: c.id,
+      role: c.role,
+      page: c.page,
+      x: c.x,
+      y: c.y,
+      width: c.width,
+      height: c.height,
+      label: c.label || (c.role === 'USER' ? 'User' : 'Super User'),
+    }))
 
     const body = new FormData()
     body.append('title', form.title)
     body.append('assigned_user_id', form.assigned_user_id)
     body.append('file', file)
-    body.append('signature_page', String(userBox.page))
-    body.append('signature_x', String(userBox.x))
-    body.append('signature_y', String(userBox.y))
-    body.append('signature_width', String(userBox.width))
-    body.append('signature_height', String(userBox.height))
-    body.append('su_signature_page', String(suBox.page))
-    body.append('su_signature_x', String(suBox.x))
-    body.append('su_signature_y', String(suBox.y))
-    body.append('su_signature_width', String(suBox.width))
-    body.append('su_signature_height', String(suBox.height))
+    body.append('placements', JSON.stringify(placements))
 
     setLoading(true)
     try {
@@ -105,8 +114,7 @@ export default function SuperUserDashboard() {
       setSuccess('Document uploaded and assigned')
       setForm(emptyForm)
       setFile(null)
-      setUserBox(null)
-      setSuBox(null)
+      setCanvases([newCanvas('USER')])
       e.target.reset()
       await loadLists()
     } catch (err) {
@@ -142,9 +150,8 @@ export default function SuperUserDashboard() {
       <section className="mb-8 rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
         <h2 className="mb-4 text-lg font-semibold text-heading">Upload & assign PDF</h2>
         <p className="mb-5 text-sm text-body">
-          Open the PDF, then drag the <span className="text-emerald-300">User</span> and{' '}
-          <span className="text-sky-300">Super User</span> signature canvases onto the signature
-          fields. Each canvas is clearly labeled by role; coordinates are saved automatically.
+          Add as many white signature canvases as you need. Set each to User or Super User, place
+          and resize them on the PDF. Canvases stay independent of each other.
         </p>
 
         <form className="grid gap-4" onSubmit={handleUpload}>
@@ -202,16 +209,8 @@ export default function SuperUserDashboard() {
           </div>
 
           <div>
-            <p className={`${labelClass} mb-2`}>Signature placement</p>
-            <PdfSignaturePlacer
-              file={file}
-              userBox={userBox}
-              suBox={suBox}
-              onChange={({ userBox: nextUser, suBox: nextSu }) => {
-                setUserBox(nextUser)
-                setSuBox(nextSu)
-              }}
-            />
+            <p className={`${labelClass} mb-2`}>Signature canvases</p>
+            <PdfSignaturePlacer file={file} canvases={canvases} onChange={setCanvases} />
           </div>
 
           {error ? (
