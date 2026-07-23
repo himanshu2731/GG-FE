@@ -53,7 +53,7 @@ export default function PdfRoleCanvases({
   const [pageNumber, setPageNumber] = useState(1)
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 })
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 })
-  const [frameWidth, setFrameWidth] = useState(720)
+  const [frameSize, setFrameSize] = useState({ width: 720, height: 560 })
   const layerRef = useRef(null)
   const frameRef = useRef(null)
   const padRefs = useRef({})
@@ -89,7 +89,7 @@ export default function PdfRoleCanvases({
     const el = frameRef.current
     if (!el) return undefined
     function measure() {
-      setFrameWidth(el.clientWidth)
+      setFrameSize({ width: el.clientWidth, height: el.clientHeight })
     }
     measure()
     const ro = new ResizeObserver(measure)
@@ -115,7 +115,16 @@ export default function PdfRoleCanvases({
     }
   })
 
-  const pageWidth = Math.max(200, Math.min(720, frameWidth - 24))
+  // Fit PDF inside the preview frame without page scroll.
+  const pageWidth = useMemo(() => {
+    const pad = 16
+    const availW = Math.max(160, frameSize.width - pad)
+    const availH = Math.max(160, frameSize.height - pad)
+    const pdfW = pageSize.width || 612
+    const pdfH = pageSize.height || 792
+    const aspect = pdfW / pdfH
+    return Math.max(160, Math.min(availW, availH * aspect))
+  }, [frameSize.width, frameSize.height, pageSize.width, pageSize.height])
 
   function toDisplay(box) {
     if (!box || !pageSize.width || !displaySize.width) return null
@@ -168,8 +177,8 @@ export default function PdfRoleCanvases({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+    <div className="flex h-full min-h-[360px] flex-col gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-sm">
         <p className="text-muted">{hint}</p>
         <div className="flex items-center gap-2 text-muted">
           <button
@@ -196,9 +205,9 @@ export default function PdfRoleCanvases({
 
       <div
         ref={frameRef}
-        className="overflow-x-hidden overflow-y-auto rounded-md border border-border bg-[#0f141a] p-3"
+        className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md border border-border bg-[#0a0a0c] p-2"
       >
-        <div ref={layerRef} className="relative mx-auto block w-fit max-w-full">
+        <div ref={layerRef} className="relative block w-fit max-w-full shrink-0">
           <Document
             key={pdfSrc}
             file={pdfSrc}

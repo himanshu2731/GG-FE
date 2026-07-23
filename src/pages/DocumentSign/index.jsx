@@ -43,6 +43,10 @@ export default function DocumentSign() {
   const canSuSign = isSuperUser && doc?.status === 'USER_SIGNED'
   const activeRole = canUserSign ? ROLES.USER : canSuSign ? ROLES.SUPER_USER : null
   const backTo = isSuperUser ? '/super-user' : '/user'
+  const canSign = canUserSign || canSuSign
+  const pdfSrc = doc
+    ? `${doc.file_url}${doc.file_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(doc.file_updated_at || doc.updated_at || '')}`
+    : null
 
   async function handleSign() {
     setError('')
@@ -75,22 +79,24 @@ export default function DocumentSign() {
   }
 
   return (
-    <main className="mx-auto min-h-svh max-w-5xl px-6 py-8">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-heading">{doc?.title || 'Document'}</h1>
-          {doc ? <p className="mt-1 text-sm text-muted">Status: {doc.status}</p> : null}
+    <main className="mx-auto flex h-svh max-w-7xl flex-col overflow-hidden px-6 py-4">
+      <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display truncate text-2xl font-semibold text-heading">
+            {doc?.title || 'Document'}
+          </h1>
+          {doc ? <p className="mt-0.5 text-sm text-muted">Status: {doc.status}</p> : null}
         </div>
         <UserMenu />
       </header>
 
       {error ? (
-        <p className="mb-4 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <p className="mb-3 shrink-0 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {error}
         </p>
       ) : null}
       {success ? (
-        <p className="mb-4 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+        <p className="mb-3 shrink-0 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
           {success}
         </p>
       ) : null}
@@ -98,53 +104,56 @@ export default function DocumentSign() {
       {loading ? (
         <p className="text-sm text-muted">Loading document…</p>
       ) : doc ? (
-        <>
-          {doc.status === 'SU_SIGNED' || doc.status === 'VERIFIED' ? (
-            <div className="mb-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {doc.status === 'SU_SIGNED' || doc.status === 'VERIFIED' ? (
               <a
-                href={`${doc.file_url}${doc.file_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(doc.file_updated_at || doc.updated_at || '')}`}
+                href={pdfSrc}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm font-semibold text-accent hover:text-accent-hover"
+                className="rounded-md border border-border-strong px-4 py-2 text-sm font-semibold text-heading"
               >
                 Open PDF
               </a>
-            </div>
-          ) : null}
+            ) : null}
+            {canSign ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => signaturePadsRef.current?.clearAll?.()}
+                  className="rounded-md border border-border-strong px-4 py-2 text-sm font-semibold text-heading"
+                >
+                  Clear signature
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleSign}
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
+                >
+                  {submitting
+                    ? 'Submitting…'
+                    : canSuSign
+                      ? 'Submit Super User signature'
+                      : 'Submit signature'}
+                </button>
+              </>
+            ) : null}
+          </div>
 
-          <PdfRoleCanvases
-            key={`${doc.id}-${doc.file_url}-${doc.status}`}
-            fileUrl={doc.file_url}
-            document={doc}
-            viewerRole={viewerRole}
-            activeRole={activeRole}
-            signaturePadsRef={signaturePadsRef}
-          />
-
-          {canUserSign || canSuSign ? (
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => signaturePadsRef.current?.clearAll?.()}
-                className="rounded-md border border-border-strong px-4 py-2 text-sm font-semibold text-heading"
-              >
-                Clear signature
-              </button>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={handleSign}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
-              >
-                {submitting
-                  ? 'Submitting…'
-                  : canSuSign
-                    ? 'Submit Super User signature'
-                    : 'Submit signature'}
-              </button>
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface/80 p-3">
+            <div className="min-h-0 flex-1">
+              <PdfRoleCanvases
+                key={`${doc.id}-${doc.file_url}-${doc.status}`}
+                fileUrl={doc.file_url}
+                document={doc}
+                viewerRole={viewerRole}
+                activeRole={activeRole}
+                signaturePadsRef={signaturePadsRef}
+              />
             </div>
-          ) : null}
-        </>
+          </section>
+        </div>
       ) : (
         <button
           type="button"
