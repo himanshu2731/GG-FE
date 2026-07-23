@@ -1,19 +1,32 @@
-import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { ROLES, useAuth } from '../../auth/AuthContext'
 
 const inputClass =
   'w-full rounded-xl border border-border bg-input px-3.5 py-3 text-[0.95rem] text-heading outline-none placeholder:text-muted/80 transition focus:border-accent focus:ring-1 focus:ring-accent/30'
 const labelClass = 'mb-2 block text-[0.8rem] font-medium tracking-wide text-heading/90'
 
+const SESSION_EXPIRED_MESSAGE = 'Your session has expired. Please log in again.'
+
 export default function Login() {
   const { login, isAuthenticated, isSuperUser } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState(ROLES.USER)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() =>
+    searchParams.get('reason') === 'expired' ? SESSION_EXPIRED_MESSAGE : '',
+  )
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('reason') !== 'expired') return
+    setError(SESSION_EXPIRED_MESSAGE)
+    const next = new URLSearchParams(searchParams)
+    next.delete('reason')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   if (isAuthenticated) {
     return <Navigate to={isSuperUser ? '/super-user' : '/user'} replace />
@@ -25,7 +38,10 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login({ email, password, role })
-      if (user.role === ROLES.SUPER_USER) {
+      const next = searchParams.get('next')
+      if (next && next.startsWith('/')) {
+        navigate(next, { replace: true })
+      } else if (user.role === ROLES.SUPER_USER) {
         navigate('/super-user', { replace: true })
       } else {
         navigate('/user', { replace: true })
