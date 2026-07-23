@@ -53,7 +53,9 @@ export default function PdfRoleCanvases({
   const [pageNumber, setPageNumber] = useState(1)
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 })
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 })
+  const [frameWidth, setFrameWidth] = useState(720)
   const layerRef = useRef(null)
+  const frameRef = useRef(null)
   const padRefs = useRef({})
 
   const placements = useMemo(() => {
@@ -63,21 +65,37 @@ export default function PdfRoleCanvases({
 
   const status = doc?.status || ''
   const awaitingUserSign = status === 'UPLOADED'
-  const userSigned = status === 'USER_SIGNED' || status === 'SU_SIGNED' || status === 'VERIFIED'
+  const awaitingSuSign = status === 'USER_SIGNED'
+  const suDone = status === 'SU_SIGNED' || status === 'VERIFIED'
   const userActive = activeRole === 'USER' && awaitingUserSign
-  const showSuGuides = viewerRole === 'SUPER_USER' && status !== 'SU_SIGNED' && status !== 'VERIFIED'
+  const suActive = activeRole === 'SUPER_USER' && awaitingSuSign
+  const showSuGuides = viewerRole === 'SUPER_USER' && !suDone
 
   const pdfSrc = useMemo(() => {
     if (!fileUrl) return null
-    const stamp = doc?.file_updated_at || doc?.user_signed_at || doc?.updated_at || ''
+    const stamp = doc?.file_updated_at || doc?.user_signed_at || doc?.su_signed_at || doc?.updated_at || ''
     const join = fileUrl.includes('?') ? '&' : '?'
     return stamp ? `${fileUrl}${join}v=${encodeURIComponent(stamp)}` : fileUrl
-  }, [fileUrl, doc?.file_updated_at, doc?.user_signed_at, doc?.updated_at])
+  }, [fileUrl, doc?.file_updated_at, doc?.user_signed_at, doc?.su_signed_at, doc?.updated_at])
 
   useEffect(() => {
-    const firstUser = placements.find((p) => p.role === 'USER')
-    if (firstUser?.page) setPageNumber(firstUser.page)
-  }, [placements])
+    const first =
+      (suActive && placements.find((p) => p.role === 'SUPER_USER')) ||
+      placements.find((p) => p.role === 'USER')
+    if (first?.page) setPageNumber(first.page)
+  }, [placements, suActive])
+
+  useEffect(() => {
+    const el = frameRef.current
+    if (!el) return undefined
+    function measure() {
+      setFrameWidth(el.clientWidth)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [pdfSrc])
 
   useEffect(() => {
     if (!signaturePadsRef) return
@@ -97,7 +115,7 @@ export default function PdfRoleCanvases({
     }
   })
 
-  const pageWidth = Math.min(720, typeof window !== 'undefined' ? window.innerWidth - 96 : 720)
+  const pageWidth = Math.max(200, Math.min(720, frameWidth - 24))
 
   function toDisplay(box) {
     if (!box || !pageSize.width || !displaySize.width) return null
@@ -126,18 +144,25 @@ export default function PdfRoleCanvases({
       // Only overlay USER areas while signing — after that, ink is in the PDF.
       return userActive || (awaitingUserSign && viewerRole === 'SUPER_USER')
     }
-    if (p.role === 'SUPER_USER') return showSuGuides
+    if (p.role === 'SUPER_USER') {
+      if (suDone) return false
+      return suActive || showSuGuides
+    }
     return false
   })
 
   let hint = 'Viewing document.'
   if (userActive) {
     hint = 'Draw on any User canvas. Your signature is stamped into the PDF on submit.'
-  } else if (userSigned) {
+  } else if (suActive) {
+    hint = 'Draw on any Super User canvas. Your signature is stamped into the PDF on submit.'
+  } else if (suDone) {
+    hint = 'Both signatures are on the PDF below.'
+  } else if (awaitingSuSign) {
     hint =
       viewerRole === 'SUPER_USER'
-        ? 'User signature is on the PDF. Super User area is marked until you sign.'
-        : 'Your signature is on the PDF below.'
+        ? 'User has signed. Draw on the Super User canvas to complete signing.'
+        : 'Waiting for Super User signature.'
   } else if (viewerRole === 'SUPER_USER') {
     hint = 'Preview of placed canvases before the user signs.'
   }
@@ -169,8 +194,11 @@ export default function PdfRoleCanvases({
         </div>
       </div>
 
-      <div className="overflow-auto rounded-md border border-border bg-[#0a0c10] p-3">
-        <div ref={layerRef} className="relative inline-block max-w-full">
+      <div
+        ref={frameRef}
+        className="overflow-x-hidden overflow-y-auto rounded-md border border-border bg-[#0f141a] p-3"
+      >
+        <div ref={layerRef} className="relative mx-auto block w-fit max-w-full">
           <Document
             key={pdfSrc}
             file={pdfSrc}
@@ -203,7 +231,7 @@ export default function PdfRoleCanvases({
               return (
                 <div
                   key={p.id || `user-${index}`}
-                  className="absolute z-20 overflow-hidden border border-slate-400 bg-white shadow-md"
+                  className="absolute z-20 overflow-hidden border-2 border-sky-400 bg-white shadow-md"
                   style={{
                     left: display.x,
                     top: display.y,
@@ -224,11 +252,36 @@ export default function PdfRoleCanvases({
               )
             }
 
+            if (!isUser && suActive) {
+              return (
+                <div
+                  key={p.id || `su-${index}`}
+                  className="absolute z-20 overflow-hidden border-2 border-emerald-400 bg-white shadow-md"
+                  style={{
+                    left: display.x,
+                    top: display.y,
+                    width: display.width,
+                    height: display.height,
+                  }}
+                >
+                  <SignatureCanvas
+                    ref={(node) => setPadRef(p.id || `su-${index}`, node)}
+                    penColor="#111827"
+                    canvasProps={{
+                      width: Math.max(1, Math.round(display.width)),
+                      height: Math.max(1, Math.round(display.height)),
+                      className: 'h-full w-full bg-white',
+                    }}
+                  />
+                </div>
+              )
+            }
+
             if (isUser) {
               return (
                 <div
                   key={p.id || `user-${index}`}
-                  className="pointer-events-none absolute z-10 overflow-hidden border border-dashed border-slate-300 bg-white/40"
+                  className="pointer-events-none absolute z-10 overflow-hidden border border-dashed border-sky-300 bg-white/40"
                   style={{
                     left: display.x,
                     top: display.y,
@@ -246,7 +299,7 @@ export default function PdfRoleCanvases({
             return (
               <div
                 key={p.id || `su-${index}`}
-                className="pointer-events-none absolute z-10 overflow-hidden border border-dashed border-slate-300 bg-white/50"
+                className="pointer-events-none absolute z-10 overflow-hidden border border-dashed border-emerald-300 bg-white/50"
                 style={{
                   left: display.x,
                   top: display.y,

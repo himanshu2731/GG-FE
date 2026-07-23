@@ -1,18 +1,19 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0c0e12;
-  --color-surface: #141820;
-  --color-input: #1a1f2a;
-  --color-border: #2a3140;
-  --color-border-strong: #3a4356;
-  --color-muted: #6b7385;
-  --color-body: #a8b0c0;
-  --color-heading: #eef1f6;
-  --color-accent: #3d9a8b;
-  --color-accent-hover: #4cb3a2;
+  --color-bg: #000000;
+  --color-surface: #0c0c0e;
+  --color-input: #141416;
+  --color-border: #2a2a2e;
+  --color-border-strong: #3f3f46;
+  --color-muted: #8a8a93;
+  --color-body: #b4b4bc;
+  --color-heading: #f4f4f5;
+  --color-accent: #c4c4cc;
+  --color-accent-hover: #d8d8de;
   --color-danger: #e06c75;
-  --font-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Sora", ui-sans-serif, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
 }
 
 html {
@@ -21,13 +22,16 @@ html {
 
 body {
   @apply m-0 min-h-svh bg-bg font-sans text-body antialiased;
-  background-image: radial-gradient(
-    ellipse 80% 50% at 50% -20%,
-    rgba(61, 154, 139, 0.12),
-    transparent
-  );
+  background-color: #000000;
+  background-image:
+    radial-gradient(ellipse 70% 45% at 50% -10%, rgba(255, 255, 255, 0.05), transparent 55%),
+    radial-gradient(ellipse 45% 35% at 100% 100%, rgba(255, 255, 255, 0.025), transparent 50%);
 }
 
 #root {
   @apply min-h-svh;
+}
+
+.font-display {
+  font-family: var(--font-display);
 }

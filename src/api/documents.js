@@ -46,3 +46,12 @@ export function userSignDocument(id, signatureBlob) {
     body,
   })
 }
+
+export function suSignDocument(id, signatureBlob) {
+  const body = new FormData()
+  body.append('signature', signatureBlob, 'signature.png')
+  return request(`/documents/${id}/su-sign`, {
+    method: 'POST',
+    body,
+  })
+}

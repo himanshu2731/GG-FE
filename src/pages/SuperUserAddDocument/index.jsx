@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { listUsers, uploadDocument } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
 import PdfSignaturePlacer from '../../components/PdfSignaturePlacer'
+import UserMenu from '../../components/UserMenu'
 
 const inputClass =
   'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
@@ -14,7 +15,7 @@ const emptyForm = {
 }
 
 export default function SuperUserAddDocument() {
-  const { isAuthenticated, isSuperUser, logout } = useAuth()
+  const { isAuthenticated, isSuperUser } = useAuth()
   const navigate = useNavigate()
   const [users, setUsers] = useState([])
   const [form, setForm] = useState(emptyForm)
@@ -45,7 +46,7 @@ export default function SuperUserAddDocument() {
   }, [isAuthenticated, isSuperUser])
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (!isSuperUser) return <Navigate to="/" replace />
+  if (!isSuperUser) return <Navigate to="/user" replace />
 
   function updateField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -70,11 +71,15 @@ export default function SuperUserAddDocument() {
       return
     }
     if (placements.length === 0) {
-      setError('Drag the signature canvas onto the PDF at least once')
+      setError('Add at least one signature canvas on the PDF')
       return
     }
     if (!placements.some((p) => p.role === 'USER')) {
-      setError('At least one placement must be assigned to the User')
+      setError('At least one User canvas is required')
+      return
+    }
+    if (!placements.some((p) => p.role === 'SUPER_USER')) {
+      setError('At least one Super User canvas is required')
       return
     }
 
@@ -107,30 +112,19 @@ export default function SuperUserAddDocument() {
   }
 
   return (
-    <main className="mx-auto min-h-svh max-w-5xl px-6 py-8">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <main className="mx-auto flex h-svh max-w-7xl flex-col overflow-hidden px-6 py-4">
+      <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-heading">Upload & assign PDF</h1>
-          <p className="mt-1 text-sm text-muted">
-            Drag the signature canvas onto the PDF as many times as you need.
+          <h1 className="font-display text-2xl font-semibold text-heading">Upload & assign PDF</h1>
+          <p className="mt-0.5 text-sm text-muted">
+            Set title and assignee above, then place canvases on the preview.
           </p>
         </div>
-        <div className="flex gap-3">
-          <Link to="/super-user" className="text-sm text-muted hover:text-body">
-            Documents
-          </Link>
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-md border border-border-strong px-3 py-1.5 text-sm font-semibold text-heading"
-          >
-            Log out
-          </button>
-        </div>
+        <UserMenu />
       </header>
 
-      <section className="rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c] p-6 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
-        <form className="grid gap-4" onSubmit={handleUpload}>
+      <form onSubmit={handleUpload} className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="grid shrink-0 gap-3 rounded-2xl border border-border bg-surface/80 p-3 sm:grid-cols-2">
           <div>
             <label className={labelClass} htmlFor="title">
               Title
@@ -164,54 +158,65 @@ export default function SuperUserAddDocument() {
               ))}
             </select>
             {!loadingUsers && users.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">
+              <p className="mt-2 text-xs text-muted">
                 No users with role {ROLES.USER} yet. Create a User account first.
               </p>
             ) : null}
           </div>
+        </div>
 
-          <div>
-            <label className={labelClass} htmlFor="file">
-              PDF file
-            </label>
-            <input
-              id="file"
-              type="file"
-              accept="application/pdf,.pdf"
-              required
-              onChange={onFileChange}
-              className="w-full text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-2 file:font-semibold file:text-[#04110f]"
-            />
-          </div>
-
-          <div>
-            <p className={`${labelClass} mb-2`}>Signature canvas</p>
-            <PdfSignaturePlacer file={file} placements={placements} onChange={setPlacements} />
-          </div>
-
-          {error ? (
-            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex min-h-[44px] items-center justify-center rounded-md bg-accent px-4 font-semibold text-[#04110f] hover:bg-accent-hover disabled:opacity-60"
-            >
-              {loading ? 'Uploading…' : 'Upload & assign'}
-            </button>
-            <Link
-              to="/super-user"
-              className="inline-flex min-h-[44px] items-center justify-center rounded-md border border-border-strong px-4 text-sm font-semibold text-heading"
-            >
-              Cancel
-            </Link>
-          </div>
-        </form>
-      </section>
+        <div className="min-h-0 flex-1">
+          <PdfSignaturePlacer
+            file={file}
+            placements={placements}
+            onChange={setPlacements}
+            sidebar={
+              <div>
+                <label className={labelClass} htmlFor="file">
+                  PDF file
+                </label>
+                <input
+                  id="file"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  required
+                  onChange={onFileChange}
+                  className="w-full text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-2 file:font-semibold file:text-black"
+                />
+                {file ? (
+                  <p className="mt-1.5 truncate text-xs text-muted" title={file.name}>
+                    {file.name}
+                  </p>
+                ) : null}
+              </div>
+            }
+            footer={
+              <>
+                {error ? (
+                  <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {error}
+                  </p>
+                ) : null}
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
+                  >
+                    {loading ? 'Uploading…' : 'Upload & assign'}
+                  </button>
+                  <Link
+                    to="/super-user"
+                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading"
+                  >
+                    Cancel
+                  </Link>
+                </div>
+              </>
+            }
+          />
+        </div>
+      </form>
     </main>
   )
 }

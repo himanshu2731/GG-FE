@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { getDocument, userSignDocument } from '../../api/documents'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { getDocument, suSignDocument, userSignDocument } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
 import PdfRoleCanvases from '../../components/PdfRoleCanvases'
+import UserMenu from '../../components/UserMenu'
 
 export default function DocumentSign() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAuthenticated, isUser, isSuperUser, logout } = useAuth()
+  const { isAuthenticated, isUser, isSuperUser } = useAuth()
   const [doc, setDoc] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -39,7 +40,8 @@ export default function DocumentSign() {
 
   const viewerRole = isSuperUser ? ROLES.SUPER_USER : ROLES.USER
   const canUserSign = isUser && doc?.status === 'UPLOADED'
-  const activeRole = canUserSign ? ROLES.USER : null
+  const canSuSign = isSuperUser && doc?.status === 'USER_SIGNED'
+  const activeRole = canUserSign ? ROLES.USER : canSuSign ? ROLES.SUPER_USER : null
   const backTo = isSuperUser ? '/super-user' : '/user'
 
   async function handleSign() {
@@ -47,15 +49,20 @@ export default function DocumentSign() {
     setSuccess('')
     const dataUrl = signaturePadsRef.current?.firstDrawnDataUrl?.()
     if (!dataUrl) {
-      setError('Draw your signature in a User canvas area')
+      setError(
+        canSuSign
+          ? 'Draw your signature in a Super User canvas area'
+          : 'Draw your signature in a User canvas area',
+      )
       return
     }
 
     setSubmitting(true)
     try {
       const blob = await (await fetch(dataUrl)).blob()
-      const res = await userSignDocument(id, blob)
-      // Reload full document so both User and Super User see the stamped PDF URL.
+      const res = canSuSign
+        ? await suSignDocument(id, blob)
+        : await userSignDocument(id, blob)
       const fresh = await getDocument(id)
       setDoc(fresh)
       setSuccess(`Signed successfully · status ${res.status || fresh.status}`)
@@ -72,20 +79,9 @@ export default function DocumentSign() {
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-heading">{doc?.title || 'Document'}</h1>
-          <p className="mt-1 text-sm text-muted">{doc ? `Status: ${doc.status}` : 'Loading…'}</p>
+          {doc ? <p className="mt-1 text-sm text-muted">Status: {doc.status}</p> : null}
         </div>
-        <div className="flex gap-3">
-          <Link to={backTo} className="text-sm text-muted hover:text-body">
-            Back
-          </Link>
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-md border border-border-strong px-3 py-1.5 text-sm font-semibold text-heading"
-          >
-            Log out
-          </button>
-        </div>
+        <UserMenu />
       </header>
 
       {error ? (
@@ -103,18 +99,18 @@ export default function DocumentSign() {
         <p className="text-sm text-muted">Loading document…</p>
       ) : doc ? (
         <>
-          {canUserSign ? (
-            <p className="mb-3 text-sm text-body">
-              Draw on a User canvas, then submit. Your signature is stamped into the PDF for you and
-              the Super User to view.
-            </p>
-          ) : doc.status === 'USER_SIGNED' ? (
-            <p className="mb-3 text-sm text-body">
-              User signature is baked into the PDF below. Open or refresh to see the updated file.
-            </p>
-          ) : (
-            <p className="mb-3 text-sm text-body">Document status: {doc.status}</p>
-          )}
+          {doc.status === 'SU_SIGNED' || doc.status === 'VERIFIED' ? (
+            <div className="mb-3">
+              <a
+                href={`${doc.file_url}${doc.file_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(doc.file_updated_at || doc.updated_at || '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold text-accent hover:text-accent-hover"
+              >
+                Open PDF
+              </a>
+            </div>
+          ) : null}
 
           <PdfRoleCanvases
             key={`${doc.id}-${doc.file_url}-${doc.status}`}
@@ -125,7 +121,7 @@ export default function DocumentSign() {
             signaturePadsRef={signaturePadsRef}
           />
 
-          {canUserSign ? (
+          {canUserSign || canSuSign ? (
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 type="button"
@@ -138,17 +134,15 @@ export default function DocumentSign() {
                 type="button"
                 disabled={submitting}
                 onClick={handleSign}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-[#04110f] hover:bg-accent-hover disabled:opacity-60"
+                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
               >
-                {submitting ? 'Submitting…' : 'Submit signature'}
+                {submitting
+                  ? 'Submitting…'
+                  : canSuSign
+                    ? 'Submit Super User signature'
+                    : 'Submit signature'}
               </button>
             </div>
-          ) : null}
-
-          {!canUserSign && isUser ? (
-            <p className="mt-4 text-sm text-muted">
-              This document is not awaiting your signature ({doc.status}).
-            </p>
           ) : null}
         </>
       ) : (
