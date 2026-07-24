@@ -1,22 +1,34 @@
-import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { ROLES, useAuth } from '../../auth/AuthContext'
+import Button from '../../components/Button'
+import Container, { Alert, Card } from '../../components/Container'
+import Input, { Label } from '../../components/Input'
 
-const inputClass =
-  'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
-const labelClass = 'mb-1.5 block text-sm font-medium text-heading'
+const SESSION_EXPIRED_MESSAGE = 'Your session has expired. Please log in again.'
 
 export default function Login() {
-  const { login, isAuthenticated } = useAuth()
+  const { login, isAuthenticated, isSuperUser } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState(ROLES.USER)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() =>
+    searchParams.get('reason') === 'expired' ? SESSION_EXPIRED_MESSAGE : '',
+  )
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    if (searchParams.get('reason') !== 'expired') return
+    setError(SESSION_EXPIRED_MESSAGE)
+    const next = new URLSearchParams(searchParams)
+    next.delete('reason')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
   if (isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to={isSuperUser ? '/super-user' : '/user'} replace />
   }
 
   async function handleSubmit(e) {
@@ -25,10 +37,13 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login({ email, password, role })
-      if (user.role === ROLES.SUPER_USER) {
+      const next = searchParams.get('next')
+      if (next && next.startsWith('/')) {
+        navigate(next, { replace: true })
+      } else if (user.role === ROLES.SUPER_USER) {
         navigate('/super-user', { replace: true })
       } else {
-        navigate('/', { replace: true })
+        navigate('/user', { replace: true })
       }
     } catch (err) {
       setError(err.message || 'Login failed')
@@ -38,100 +53,80 @@ export default function Login() {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center p-6">
-      <div className="w-full max-w-[420px] rounded-[10px] border border-border bg-gradient-to-b from-surface to-[#10141c] p-8 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
-        <h1 className="mb-2.5 text-[1.75rem] font-semibold text-heading">Log in</h1>
-        <p className="mb-6 text-body">
+    <Container variant="auth">
+      <Card variant="auth">
+        <h1 className="font-display mb-3 text-[2.15rem] font-semibold leading-tight tracking-tight text-heading">
+          Log in
+        </h1>
+        <p className="mb-8 text-[0.95rem] leading-relaxed text-body">
           Choose your role, then sign in with email and password.
         </p>
 
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div>
-            <span className={labelClass}>Login as</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
+            <Label size="auth">Login as</Label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Button
                 type="button"
+                variant="toggle"
+                selected={role === ROLES.USER}
                 onClick={() => setRole(ROLES.USER)}
-                className={`min-h-[42px] rounded-md border px-3 text-sm font-semibold ${
-                  role === ROLES.USER
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-border text-body hover:border-border-strong'
-                }`}
               >
                 User
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="toggle"
+                selected={role === ROLES.SUPER_USER}
                 onClick={() => setRole(ROLES.SUPER_USER)}
-                className={`min-h-[42px] rounded-md border px-3 text-sm font-semibold ${
-                  role === ROLES.SUPER_USER
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-border text-body hover:border-border-strong'
-                }`}
               >
                 Super User
-              </button>
+              </Button>
             </div>
           </div>
 
-          <div>
-            <label className={labelClass} htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
-              placeholder="you@example.com"
-            />
-          </div>
+          <Input
+            label="Email"
+            id="email"
+            size="auth"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+          />
 
-          <div>
-            <label className={labelClass} htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
-              placeholder="Your password"
-            />
-          </div>
+          <Input
+            label="Password"
+            id="password"
+            size="auth"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password"
+          />
 
-          {error ? (
-            <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
+          {error ? <Alert>{error}</Alert> : null}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-1 inline-flex min-h-[44px] items-center justify-center rounded-md bg-accent px-4 font-semibold text-[#04110f] hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <Button type="submit" size="auth" fullWidth className="mt-1" disabled={loading}>
             {loading
               ? 'Signing in…'
               : role === ROLES.SUPER_USER
                 ? 'Log in as Super User'
                 : 'Log in as User'}
-          </button>
+          </Button>
         </form>
 
-        <Link to="/signup" className="mt-5 block text-accent hover:text-accent-hover">
-          Need an account? Sign up
+        <Link
+          to="/signup"
+          className="mt-7 block text-center text-sm text-accent transition hover:text-accent-hover"
+        >
+          Need an account? <span className="font-semibold">Sign up</span>
         </Link>
-        <Link to="/" className="mt-3 block text-muted hover:text-body">
-          Back home
-        </Link>
-      </div>
-    </main>
+      </Card>
+    </Container>
   )
 }

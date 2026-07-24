@@ -13,9 +13,45 @@ export function listDocuments(params = {}) {
   return request(`/documents${qs ? `?${qs}` : ''}`)
 }
 
+export function getDocument(id) {
+  return request(`/documents/${id}`)
+}
+
 export function uploadDocument(formData) {
   return request('/documents/upload', {
     method: 'POST',
     body: formData,
+  })
+}
+
+export function updateDocument(id, payload) {
+  return request(`/documents/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteDocument(id) {
+  return request(`/documents/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export function userSignDocument(id, signatureBlob) {
+  const body = new FormData()
+  body.append('signature', signatureBlob, 'signature.png')
+  return request(`/documents/${id}/user-sign`, {
+    method: 'POST',
+    body,
+  })
+}
+
+export function suSignDocument(id, signatureBlob) {
+  const body = new FormData()
+  body.append('signature', signatureBlob, 'signature.png')
+  return request(`/documents/${id}/su-sign`, {
+    method: 'POST',
+    body,
   })
 }
