@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   deleteDocument,
   getDocument,
@@ -7,13 +7,12 @@ import {
   updateDocument,
 } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
+import Button from '../../components/Button'
+import Container, { Alert, Card } from '../../components/Container'
+import Input from '../../components/Input'
 import PdfRoleCanvases from '../../components/PdfRoleCanvases'
 import PdfSignaturePlacer from '../../components/PdfSignaturePlacer'
 import UserMenu from '../../components/UserMenu'
-
-const inputClass =
-  'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
-const labelClass = 'mb-1.5 block text-sm font-medium text-heading'
 
 function toEditablePlacements(doc) {
   const list = doc?.signature_placements
@@ -188,17 +187,23 @@ export default function SuperUserDocumentDetail() {
     ? `${doc.file_url}${doc.file_url.includes('?') ? '&' : '?'}v=${encodeURIComponent(doc.file_updated_at || doc.updated_at || '')}`
     : null
 
+  const assigneeLabel = doc?.assigned_user?.name
+    ? `${doc.assigned_user.name} (${doc.assigned_user.email})`
+    : doc?.assigned_user?.email || '—'
+
   if (editing && doc) {
     return (
-      <main className="mx-auto flex h-svh max-w-7xl flex-col overflow-hidden px-6 py-4">
+      <Container variant="workspace">
         <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={cancelEdit}
-              className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border-strong text-heading hover:border-accent hover:text-accent"
               aria-label="Back"
               title="Back"
+              className="mt-0.5 shrink-0"
             >
               <svg
                 className="h-5 w-5"
@@ -212,7 +217,7 @@ export default function SuperUserDocumentDetail() {
               >
                 <path d="m15 18-6-6 6-6" />
               </svg>
-            </button>
+            </Button>
             <div className="min-w-0">
               <h1 className="font-display text-2xl font-semibold text-heading">Edit document</h1>
               <p className="mt-0.5 text-sm text-muted">
@@ -231,79 +236,59 @@ export default function SuperUserDocumentDetail() {
               onChange={setPlacements}
               sidebar={
                 <div className="space-y-3">
-                  <div>
-                    <label className={labelClass} htmlFor="title">
-                      Title
-                    </label>
-                    <input
-                      id="title"
-                      required
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className={inputClass}
-                      placeholder="Contract agreement"
-                    />
-                  </div>
+                  <Input
+                    label="Title"
+                    id="title"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Contract agreement"
+                  />
 
-                  <div>
-                    <label className={labelClass} htmlFor="assigned_user_id">
-                      Assign to user
-                    </label>
-                    {canReassign ? (
-                      <select
-                        id="assigned_user_id"
-                        required
-                        value={assignedUserId}
-                        onChange={(e) => setAssignedUserId(e.target.value)}
-                        className={inputClass}
-                      >
-                        <option value="">Select a user</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({u.email})
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <p className="rounded-md border border-border bg-input px-3 py-2.5 text-sm text-body">
-                        {doc.assigned_user?.name
-                          ? `${doc.assigned_user.name} (${doc.assigned_user.email})`
-                          : doc.assigned_user?.email || '—'}
-                        <span className="mt-1 block text-xs text-muted">
-                          Assignee cannot be changed after the user has signed.
-                        </span>
-                      </p>
-                    )}
-                  </div>
+                  {canReassign ? (
+                    <Input
+                      label="Assign to user"
+                      id="assigned_user_id"
+                      as="select"
+                      required
+                      value={assignedUserId}
+                      onChange={(e) => setAssignedUserId(e.target.value)}
+                    >
+                      <option value="">Select a user</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.email})
+                        </option>
+                      ))}
+                    </Input>
+                  ) : (
+                    <Input label="Assign to user" as="static">
+                      {assigneeLabel}
+                      <span className="mt-1 block text-xs text-muted">
+                        Assignee cannot be changed after the user has signed.
+                      </span>
+                    </Input>
+                  )}
                 </div>
               }
               footer={
                 <>
-                  {error ? (
-                    <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                      {error}
-                    </p>
-                  ) : null}
+                  {error ? <Alert className="rounded-md px-3 py-2">{error}</Alert> : null}
                   <div className="flex flex-col gap-2">
-                    <button
+                    <Button
                       type="submit"
+                      fullWidth
                       disabled={
                         saving ||
                         !placements.some((p) => p.role === 'USER') ||
                         !placements.some((p) => p.role === 'SUPER_USER')
                       }
-                      className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
                     >
                       {saving ? 'Saving…' : 'Save changes'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={cancelEdit}
-                      className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading disabled:opacity-60"
-                    >
+                    </Button>
+                    <Button type="button" variant="secondary" fullWidth disabled={saving} onClick={cancelEdit}>
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </>
               }
@@ -311,56 +296,31 @@ export default function SuperUserDocumentDetail() {
           ) : (
             <div className="grid h-full min-h-0 gap-3 lg:grid-cols-[2fr_3fr]">
               <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-border bg-surface/80 p-3">
-                <div>
-                  <label className={labelClass} htmlFor="title">
-                    Title
-                  </label>
-                  <input
-                    id="title"
-                    required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className={inputClass}
-                    placeholder="Contract agreement"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="assigned_user_id">
-                    Assign to user
-                  </label>
-                  <p className="rounded-md border border-border bg-input px-3 py-2.5 text-sm text-body">
-                    {doc.assigned_user?.name
-                      ? `${doc.assigned_user.name} (${doc.assigned_user.email})`
-                      : doc.assigned_user?.email || '—'}
-                    <span className="mt-1 block text-xs text-muted">
-                      Assignee cannot be changed after the user has signed.
-                    </span>
-                  </p>
-                </div>
+                <Input
+                  label="Title"
+                  id="title"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Contract agreement"
+                />
+                <Input label="Assign to user" as="static">
+                  {assigneeLabel}
+                  <span className="mt-1 block text-xs text-muted">
+                    Assignee cannot be changed after the user has signed.
+                  </span>
+                </Input>
                 <p className="text-sm text-muted">
                   Canvases can only be changed while status is UPLOADED.
                 </p>
-                {error ? (
-                  <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                    {error}
-                  </p>
-                ) : null}
+                {error ? <Alert className="rounded-md px-3 py-2">{error}</Alert> : null}
                 <div className="mt-auto flex flex-col gap-2">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
-                  >
+                  <Button type="submit" fullWidth disabled={saving}>
                     {saving ? 'Saving…' : 'Save changes'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={cancelEdit}
-                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading disabled:opacity-60"
-                  >
+                  </Button>
+                  <Button type="button" variant="secondary" fullWidth disabled={saving} onClick={cancelEdit}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </aside>
               <div className="min-h-0 overflow-hidden rounded-2xl border-2 border-dashed border-border-strong bg-[#0a0a0c] p-2">
@@ -374,12 +334,12 @@ export default function SuperUserDocumentDetail() {
             </div>
           )}
         </form>
-      </main>
+      </Container>
     )
   }
 
   return (
-    <main className="mx-auto flex h-svh max-w-7xl flex-col overflow-hidden px-6 py-4">
+    <Container variant="workspace">
       <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display truncate text-2xl font-semibold text-heading">
@@ -389,15 +349,11 @@ export default function SuperUserDocumentDetail() {
         <UserMenu />
       </header>
 
-      {error ? (
-        <p className="mb-3 shrink-0 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error ? <Alert className="mb-3 shrink-0 rounded-md px-3 py-2">{error}</Alert> : null}
       {success ? (
-        <p className="mb-3 shrink-0 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+        <Alert variant="success" className="mb-3 shrink-0 rounded-md px-3 py-2">
           {success}
-        </p>
+        </Alert>
       ) : null}
 
       {loading ? (
@@ -405,10 +361,11 @@ export default function SuperUserDocumentDetail() {
       ) : doc ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={startEdit}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border-strong text-heading hover:border-accent hover:text-accent"
               aria-label="Edit document"
               title="Edit"
             >
@@ -425,12 +382,13 @@ export default function SuperUserDocumentDetail() {
                 <path d="M12 20h9" />
                 <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
               </svg>
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="danger"
+              size="icon"
               disabled={deleting}
               onClick={handleDelete}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-danger/40 text-danger hover:bg-danger/10 disabled:opacity-60"
               aria-label={deleting ? 'Deleting document' : 'Delete document'}
               title="Delete"
             >
@@ -454,28 +412,26 @@ export default function SuperUserDocumentDetail() {
                   <path d="M14 11v6" />
                 </svg>
               )}
-            </button>
+            </Button>
             {doc.status === 'USER_SIGNED' ? (
-              <Link
-                to={`/documents/${doc.id}`}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-hover"
-              >
+              <Button to={`/documents/${doc.id}`} size="sm">
                 Sign as Super User
-              </Link>
+              </Button>
             ) : null}
             {doc.status === 'SU_SIGNED' || doc.status === 'VERIFIED' ? (
-              <a
+              <Button
                 href={pdfSrc}
+                variant="secondary"
+                size="sm"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md border border-border-strong px-4 py-2 text-sm font-semibold text-heading"
               >
                 View signed PDF
-              </a>
+              </Button>
             ) : null}
           </div>
 
-          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface/80 p-3">
+          <Card variant="panel" as="section">
             <h2 className="mb-2 shrink-0 text-sm font-semibold text-heading">PDF</h2>
             <div className="min-h-0 flex-1">
               <PdfRoleCanvases
@@ -485,11 +441,11 @@ export default function SuperUserDocumentDetail() {
                 activeRole={null}
               />
             </div>
-          </section>
+          </Card>
         </div>
       ) : (
         <p className="text-sm text-muted">Document not found.</p>
       )}
-    </main>
+    </Container>
   )
 }

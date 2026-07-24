@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { getDocument, suSignDocument, userSignDocument } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
+import Button from '../../components/Button'
+import Container, { Alert, Card } from '../../components/Container'
 import PdfRoleCanvases from '../../components/PdfRoleCanvases'
 import UserMenu from '../../components/UserMenu'
 
@@ -79,7 +81,7 @@ export default function DocumentSign() {
   }
 
   return (
-    <main className="mx-auto flex h-svh max-w-7xl flex-col overflow-hidden px-6 py-4">
+    <Container variant="workspace">
       <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="font-display truncate text-2xl font-semibold text-heading">
@@ -90,15 +92,11 @@ export default function DocumentSign() {
         <UserMenu />
       </header>
 
-      {error ? (
-        <p className="mb-3 shrink-0 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error ? <Alert className="mb-3 shrink-0 rounded-md px-3 py-2">{error}</Alert> : null}
       {success ? (
-        <p className="mb-3 shrink-0 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+        <Alert variant="success" className="mb-3 shrink-0 rounded-md px-3 py-2">
           {success}
-        </p>
+        </Alert>
       ) : null}
 
       {loading ? (
@@ -107,41 +105,38 @@ export default function DocumentSign() {
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {doc.status === 'SU_SIGNED' || doc.status === 'VERIFIED' ? (
-              <a
+              <Button
                 href={pdfSrc}
+                variant="secondary"
+                size="sm"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-md border border-border-strong px-4 py-2 text-sm font-semibold text-heading"
               >
                 Open PDF
-              </a>
+              </Button>
             ) : null}
             {canSign ? (
               <>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => signaturePadsRef.current?.clearAll?.()}
-                  className="rounded-md border border-border-strong px-4 py-2 text-sm font-semibold text-heading"
                 >
                   Clear signature
-                </button>
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={handleSign}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
-                >
+                </Button>
+                <Button type="button" size="sm" disabled={submitting} onClick={handleSign}>
                   {submitting
                     ? 'Submitting…'
                     : canSuSign
                       ? 'Submit Super User signature'
                       : 'Submit signature'}
-                </button>
+                </Button>
               </>
             ) : null}
           </div>
 
-          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface/80 p-3">
+          <Card variant="panel" as="section">
             <div className="min-h-0 flex-1">
               <PdfRoleCanvases
                 key={`${doc.id}-${doc.file_url}-${doc.status}`}
@@ -152,17 +147,13 @@ export default function DocumentSign() {
                 signaturePadsRef={signaturePadsRef}
               />
             </div>
-          </section>
+          </Card>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => navigate(backTo)}
-          className="text-sm text-accent"
-        >
+        <Button type="button" variant="ghost" size="sm" className="border-0 text-accent" onClick={() => navigate(backTo)}>
           Return to dashboard
-        </button>
+        </Button>
       )}
-    </main>
+    </Container>
   )
 }

@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { listUsers, uploadDocument } from '../../api/documents'
 import { ROLES, useAuth } from '../../auth/AuthContext'
+import Button from '../../components/Button'
+import Container, { Alert } from '../../components/Container'
+import Input from '../../components/Input'
 import PdfSignaturePlacer from '../../components/PdfSignaturePlacer'
 import UserMenu from '../../components/UserMenu'
-
-const inputClass =
-  'w-full rounded-md border border-border bg-input px-3 py-2.5 text-heading outline-none placeholder:text-muted focus:border-accent'
-const labelClass = 'mb-1.5 block text-sm font-medium text-heading'
 
 const emptyForm = {
   title: '',
@@ -112,7 +111,7 @@ export default function SuperUserAddDocument() {
   }
 
   return (
-    <main className="mx-auto flex h-svh max-w-7xl flex-col overflow-hidden px-6 py-4">
+    <Container variant="workspace">
       <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-semibold text-heading">Upload & assign PDF</h1>
@@ -130,30 +129,23 @@ export default function SuperUserAddDocument() {
           onChange={setPlacements}
           sidebar={
             <div className="space-y-3">
-              <div>
-                <label className={labelClass} htmlFor="title">
-                  Title
-                </label>
-                <input
-                  id="title"
-                  required
-                  value={form.title}
-                  onChange={(e) => updateField('title', e.target.value)}
-                  className={inputClass}
-                  placeholder="Contract agreement"
-                />
-              </div>
+              <Input
+                label="Title"
+                id="title"
+                required
+                value={form.title}
+                onChange={(e) => updateField('title', e.target.value)}
+                placeholder="Contract agreement"
+              />
 
               <div>
-                <label className={labelClass} htmlFor="assigned_user_id">
-                  Assign to user
-                </label>
-                <select
+                <Input
+                  label="Assign to user"
                   id="assigned_user_id"
+                  as="select"
                   required
                   value={form.assigned_user_id}
                   onChange={(e) => updateField('assigned_user_id', e.target.value)}
-                  className={inputClass}
                 >
                   <option value="">Select a user</option>
                   {users.map((u) => (
@@ -161,7 +153,7 @@ export default function SuperUserAddDocument() {
                       {u.name} ({u.email})
                     </option>
                   ))}
-                </select>
+                </Input>
                 {!loadingUsers && users.length === 0 ? (
                   <p className="mt-2 text-xs text-muted">
                     No users with role {ROLES.USER} yet. Create a User account first.
@@ -170,46 +162,32 @@ export default function SuperUserAddDocument() {
               </div>
 
               <div className="border-t border-border pt-3">
-                <label className={labelClass} htmlFor="file">
-                  PDF file
-                </label>
-                <input
+                <Input
+                  label="PDF file"
                   id="file"
                   type="file"
                   accept="application/pdf,.pdf"
                   required
                   onChange={onFileChange}
-                  className="w-full text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-2 file:font-semibold file:text-black"
                 />
               </div>
             </div>
           }
           footer={
             <>
-              {error ? (
-                <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                  {error}
-                </p>
-              ) : null}
+              {error ? <Alert className="rounded-md px-3 py-2">{error}</Alert> : null}
               <div className="flex flex-col gap-2">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
-                >
+                <Button type="submit" fullWidth disabled={loading}>
                   {loading ? 'Uploading…' : 'Upload & assign'}
-                </button>
-                <Link
-                  to="/super-user"
-                  className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading"
-                >
+                </Button>
+                <Button to="/super-user" variant="secondary" fullWidth>
                   Cancel
-                </Link>
+                </Button>
               </div>
             </>
           }
         />
       </form>
-    </main>
+    </Container>
   )
 }

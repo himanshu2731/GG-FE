@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { ROLES, useAuth } from '../../auth/AuthContext'
-
-const inputClass =
-  'w-full rounded-xl border border-border bg-input px-3.5 py-3 text-[0.95rem] text-heading outline-none placeholder:text-muted/80 transition focus:border-accent focus:ring-1 focus:ring-accent/30'
-const labelClass = 'mb-2 block text-[0.8rem] font-medium tracking-wide text-heading/90'
+import Button from '../../components/Button'
+import Container, { Alert, Card } from '../../components/Container'
+import Input, { Label } from '../../components/Input'
 
 const SESSION_EXPIRED_MESSAGE = 'Your session has expired. Please log in again.'
 
@@ -54,8 +53,8 @@ export default function Login() {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center p-6">
-      <div className="w-full max-w-[440px] rounded-3xl border border-border bg-surface/80 p-8 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-10">
+    <Container variant="auth">
+      <Card variant="auth">
         <h1 className="font-display mb-3 text-[2.15rem] font-semibold leading-tight tracking-tight text-heading">
           Log in
         </h1>
@@ -65,82 +64,60 @@ export default function Login() {
 
         <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <div>
-            <span className={labelClass}>Login as</span>
+            <Label size="auth">Login as</Label>
             <div className="grid grid-cols-2 gap-2.5">
-              <button
+              <Button
                 type="button"
+                variant="toggle"
+                selected={role === ROLES.USER}
                 onClick={() => setRole(ROLES.USER)}
-                className={`min-h-[44px] rounded-xl border px-3 text-sm font-semibold transition ${
-                  role === ROLES.USER
-                    ? 'border-accent/70 bg-accent/20 text-accent-hover'
-                    : 'border-white/10 bg-black/25 text-body hover:border-border-strong hover:text-heading'
-                }`}
               >
                 User
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="toggle"
+                selected={role === ROLES.SUPER_USER}
                 onClick={() => setRole(ROLES.SUPER_USER)}
-                className={`min-h-[44px] rounded-xl border px-3 text-sm font-semibold transition ${
-                  role === ROLES.SUPER_USER
-                    ? 'border-accent/70 bg-accent/20 text-accent-hover'
-                    : 'border-white/10 bg-black/25 text-body hover:border-border-strong hover:text-heading'
-                }`}
               >
                 Super User
-              </button>
+              </Button>
             </div>
           </div>
 
-          <div>
-            <label className={labelClass} htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
-              placeholder="you@example.com"
-            />
-          </div>
+          <Input
+            label="Email"
+            id="email"
+            size="auth"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+          />
 
-          <div>
-            <label className={labelClass} htmlFor="password">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
-              placeholder="Your password"
-            />
-          </div>
+          <Input
+            label="Password"
+            id="password"
+            size="auth"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Your password"
+          />
 
-          {error ? (
-            <p className="rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
+          {error ? <Alert>{error}</Alert> : null}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-1 inline-flex min-h-[48px] items-center justify-center rounded-xl bg-accent px-4 text-[0.95rem] font-semibold text-black shadow-[0_10px_28px_rgba(255,255,255,0.06)] transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <Button type="submit" size="auth" fullWidth className="mt-1" disabled={loading}>
             {loading
               ? 'Signing in…'
               : role === ROLES.SUPER_USER
                 ? 'Log in as Super User'
                 : 'Log in as User'}
-          </button>
+          </Button>
         </form>
 
         <Link
@@ -149,7 +126,7 @@ export default function Login() {
         >
           Need an account? <span className="font-semibold">Sign up</span>
         </Link>
-      </div>
-    </main>
+      </Card>
+    </Container>
   )
 }

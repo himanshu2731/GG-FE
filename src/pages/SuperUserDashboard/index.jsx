@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { listDocuments } from '../../api/documents'
 import { useAuth } from '../../auth/AuthContext'
+import Button from '../../components/Button'
+import Container, { Alert, Card } from '../../components/Container'
+import Table, { StatusBadge } from '../../components/Table'
 import UserMenu from '../../components/UserMenu'
 
 function shortId(id) {
@@ -24,17 +27,35 @@ function isSuSigned(doc) {
   return doc.status === 'SU_SIGNED' || doc.status === 'VERIFIED'
 }
 
-function SignedBadge({ signed }) {
-  return signed ? (
-    <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
-      Signed
-    </span>
-  ) : (
-    <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/10 px-2.5 py-0.5 text-xs font-medium text-slate-400">
-      Pending
-    </span>
-  )
-}
+const columns = [
+  {
+    key: 'id',
+    header: 'ID',
+    cellClassName: 'font-mono text-xs text-heading',
+    title: (doc) => doc.id,
+    render: (doc) => shortId(doc.id),
+  },
+  {
+    key: 'title',
+    header: 'PDF name',
+    cellClassName: 'font-semibold text-heading',
+  },
+  {
+    key: 'assigned',
+    header: 'Assigned to',
+    render: (doc) => doc.assigned_user?.email || '—',
+  },
+  {
+    key: 'user_state',
+    header: 'User state',
+    render: (doc) => <StatusBadge signed={isUserSigned(doc)} />,
+  },
+  {
+    key: 'su_state',
+    header: 'SU state',
+    render: (doc) => <StatusBadge signed={isSuSigned(doc)} />,
+  },
+]
 
 export default function SuperUserDashboard() {
   const { isAuthenticated, isSuperUser } = useAuth()
@@ -64,7 +85,7 @@ export default function SuperUserDashboard() {
   if (!isSuperUser) return <Navigate to="/user" replace />
 
   return (
-    <main className="mx-auto min-h-svh max-w-6xl px-6 py-8">
+    <Container variant="dashboard">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-display text-[1.75rem] font-semibold tracking-tight text-heading">
           Documents
@@ -73,78 +94,29 @@ export default function SuperUserDashboard() {
       </header>
 
       <div className="mb-4">
-        <Link
-          to="/super-user/documents/new"
-          className="inline-flex rounded-xl bg-accent px-3.5 py-2 text-sm font-semibold text-black hover:bg-accent-hover"
-        >
+        <Button to="/super-user/documents/new" size="sm" className="rounded-xl px-3.5 py-2">
           Add document
-        </Link>
+        </Button>
       </div>
 
-      {error ? (
-        <p className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error ? <Alert className="mb-4 rounded-xl px-3 py-2">{error}</Alert> : null}
 
-      <section className="overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-surface to-[#12171e] shadow-[0_14px_40px_rgba(0,0,0,0.3)]">
-        {loading ? (
-          <p className="p-8 text-sm text-muted">Loading…</p>
-        ) : documents.length === 0 ? (
-          <div className="p-10 text-center">
-            <p className="mb-4 text-sm text-muted">No documents yet.</p>
-            <Link
-              to="/super-user/documents/new"
-              className="inline-flex rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-accent-hover"
-            >
-              Add document
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-[0.95rem]">
-              <thead className="border-b border-border bg-[#0f141a] text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-5 py-3.5 font-medium">ID</th>
-                  <th className="px-5 py-3.5 font-medium">PDF name</th>
-                  <th className="px-5 py-3.5 font-medium">Assigned to</th>
-                  <th className="px-5 py-3.5 font-medium">User state</th>
-                  <th className="px-5 py-3.5 font-medium">SU state</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {documents.map((doc) => (
-                  <tr
-                    key={doc.id}
-                    tabIndex={0}
-                    role="link"
-                    onClick={() => navigate(`/super-user/documents/${doc.id}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        navigate(`/super-user/documents/${doc.id}`)
-                      }
-                    }}
-                    className="cursor-pointer transition-colors hover:bg-white/[0.04]"
-                  >
-                    <td className="px-5 py-4 font-mono text-xs text-heading" title={doc.id}>
-                      {shortId(doc.id)}
-                    </td>
-                    <td className="px-5 py-4 font-semibold text-heading">{doc.title}</td>
-                    <td className="px-5 py-4 text-body">{doc.assigned_user?.email || '—'}</td>
-                    <td className="px-5 py-4">
-                      <SignedBadge signed={isUserSigned(doc)} />
-                    </td>
-                    <td className="px-5 py-4">
-                      <SignedBadge signed={isSuSigned(doc)} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </main>
+      <Card variant="table" as="section">
+        <Table
+          columns={columns}
+          rows={documents}
+          loading={loading}
+          onRowClick={(doc) => navigate(`/super-user/documents/${doc.id}`)}
+          empty={
+            <div className="p-10 text-center">
+              <p className="mb-4 text-sm text-muted">No documents yet.</p>
+              <Button to="/super-user/documents/new" size="sm" className="rounded-xl">
+                Add document
+              </Button>
+            </div>
+          }
+        />
+      </Card>
+    </Container>
   )
 }
