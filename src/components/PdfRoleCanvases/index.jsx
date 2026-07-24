@@ -115,9 +115,9 @@ export default function PdfRoleCanvases({
     }
   })
 
-  // Fit PDF inside the preview frame without page scroll.
+  // Fit PDF in the content frame (right padding leaves room for pager).
   const pageWidth = useMemo(() => {
-    const pad = 16
+    const pad = 8
     const availW = Math.max(160, frameSize.width - pad)
     const availH = Math.max(160, frameSize.height - pad)
     const pdfW = pageSize.width || 612
@@ -178,35 +178,36 @@ export default function PdfRoleCanvases({
 
   return (
     <div className="flex h-full min-h-[360px] flex-col gap-2">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-sm">
-        <p className="text-muted">{hint}</p>
-        <div className="flex items-center gap-2 text-muted">
-          <button
-            type="button"
-            disabled={pageNumber <= 1}
-            onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-            className="rounded border border-border px-2 py-1 disabled:opacity-40"
-          >
-            Prev
-          </button>
-          <span>
-            Page {pageNumber} / {numPages || '—'}
-          </span>
-          <button
-            type="button"
-            disabled={!numPages || pageNumber >= numPages}
-            onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
-            className="rounded border border-border px-2 py-1 disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
-      </div>
+      <p className="shrink-0 text-sm text-muted">{hint}</p>
 
       <div
         ref={frameRef}
-        className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md border border-border bg-[#0a0a0c] p-2"
+        className="relative flex min-h-0 flex-1 items-end justify-center overflow-hidden rounded-md border border-border bg-[#0a0a0c] p-1"
       >
+        <div className="pointer-events-auto absolute right-3 top-3 z-40">
+          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-black/75 px-1.5 py-1 shadow-[0_6px_16px_rgba(0,0,0,0.4)] backdrop-blur-md">
+            <button
+              type="button"
+              disabled={pageNumber <= 1}
+              onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Prev
+            </button>
+            <span className="min-w-[3.5rem] text-center text-[11px] font-semibold tabular-nums text-white">
+              {pageNumber} / {numPages || '—'}
+            </span>
+            <button
+              type="button"
+              disabled={!numPages || pageNumber >= numPages}
+              onClick={() => setPageNumber((p) => Math.min(numPages, p + 1))}
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
         <div ref={layerRef} className="relative block w-fit max-w-full shrink-0">
           <Document
             key={pdfSrc}

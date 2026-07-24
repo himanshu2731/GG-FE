@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   deleteDocument,
   getDocument,
@@ -38,11 +38,12 @@ function toEditablePlacements(doc) {
 export default function SuperUserDocumentDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { isAuthenticated, isSuperUser } = useAuth()
   const [doc, setDoc] = useState(null)
   const [users, setUsers] = useState([])
   const [placements, setPlacements] = useState([])
-  const [editing, setEditing] = useState(false)
+  const editing = searchParams.get('edit') === '1'
   const [title, setTitle] = useState('')
   const [assignedUserId, setAssignedUserId] = useState('')
   const [error, setError] = useState('')
@@ -77,6 +78,13 @@ export default function SuperUserDocumentDetail() {
     }
   }, [id, isAuthenticated, isSuperUser])
 
+  useEffect(() => {
+    if (editing || !doc) return
+    setTitle(doc.title || '')
+    setAssignedUserId(doc.assigned_user?.id || '')
+    setPlacements(toEditablePlacements(doc))
+  }, [editing, doc])
+
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (!isSuperUser) return <Navigate to="/user" replace />
 
@@ -84,21 +92,21 @@ export default function SuperUserDocumentDetail() {
   const canReassign = doc?.status === 'UPLOADED'
 
   function startEdit() {
-    setEditing(true)
     setSuccess('')
     setError('')
     setTitle(doc.title || '')
     setAssignedUserId(doc.assigned_user?.id || '')
     setPlacements(toEditablePlacements(doc))
+    setSearchParams({ edit: '1' })
   }
 
   function cancelEdit() {
-    setEditing(false)
     setSuccess('')
     setError('')
     setTitle(doc.title || '')
     setAssignedUserId(doc.assigned_user?.id || '')
     setPlacements(toEditablePlacements(doc))
+    setSearchParams({}, { replace: true })
   }
 
   async function handleSave(e) {
@@ -154,7 +162,7 @@ export default function SuperUserDocumentDetail() {
       setTitle(updated.title || '')
       setAssignedUserId(updated.assigned_user?.id || '')
       setPlacements(toEditablePlacements(updated))
-      setEditing(false)
+      setSearchParams({}, { replace: true })
       setSuccess('Document updated')
     } catch (err) {
       setError(err.message || 'Update failed')
@@ -208,100 +216,127 @@ export default function SuperUserDocumentDetail() {
             <div className="min-w-0">
               <h1 className="font-display text-2xl font-semibold text-heading">Edit document</h1>
               <p className="mt-0.5 text-sm text-muted">
-                Update title and assignee above, then adjust canvases on the preview.
+                Update title and assignee on the left, then adjust canvases on the preview.
               </p>
             </div>
           </div>
           <UserMenu />
         </header>
 
-        <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="grid shrink-0 gap-3 rounded-2xl border border-border bg-surface/80 p-3 sm:grid-cols-2">
-            <div>
-              <label className={labelClass} htmlFor="title">
-                Title
-              </label>
-              <input
-                id="title"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className={inputClass}
-                placeholder="Contract agreement"
-              />
-            </div>
+        <form onSubmit={handleSave} className="min-h-0 flex-1">
+          {canEditCanvases ? (
+            <PdfSignaturePlacer
+              url={pdfSrc}
+              placements={placements}
+              onChange={setPlacements}
+              sidebar={
+                <div className="space-y-3">
+                  <div>
+                    <label className={labelClass} htmlFor="title">
+                      Title
+                    </label>
+                    <input
+                      id="title"
+                      required
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className={inputClass}
+                      placeholder="Contract agreement"
+                    />
+                  </div>
 
-            <div>
-              <label className={labelClass} htmlFor="assigned_user_id">
-                Assign to user
-              </label>
-              {canReassign ? (
-                <select
-                  id="assigned_user_id"
-                  required
-                  value={assignedUserId}
-                  onChange={(e) => setAssignedUserId(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">Select a user</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.email})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p className="rounded-md border border-border bg-input px-3 py-2.5 text-sm text-body">
-                  {doc.assigned_user?.name
-                    ? `${doc.assigned_user.name} (${doc.assigned_user.email})`
-                    : doc.assigned_user?.email || '—'}
-                  <span className="mt-1 block text-xs text-muted">
-                    Assignee cannot be changed after the user has signed.
-                  </span>
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1">
-            {canEditCanvases ? (
-              <PdfSignaturePlacer
-                url={pdfSrc}
-                placements={placements}
-                onChange={setPlacements}
-                footer={
-                  <>
-                    {error ? (
-                      <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {error}
+                  <div>
+                    <label className={labelClass} htmlFor="assigned_user_id">
+                      Assign to user
+                    </label>
+                    {canReassign ? (
+                      <select
+                        id="assigned_user_id"
+                        required
+                        value={assignedUserId}
+                        onChange={(e) => setAssignedUserId(e.target.value)}
+                        className={inputClass}
+                      >
+                        <option value="">Select a user</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.email})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="rounded-md border border-border bg-input px-3 py-2.5 text-sm text-body">
+                        {doc.assigned_user?.name
+                          ? `${doc.assigned_user.name} (${doc.assigned_user.email})`
+                          : doc.assigned_user?.email || '—'}
+                        <span className="mt-1 block text-xs text-muted">
+                          Assignee cannot be changed after the user has signed.
+                        </span>
                       </p>
-                    ) : null}
-                    <div className="flex flex-col gap-2">
-                      <button
-                        type="submit"
-                        disabled={
-                          saving ||
-                          !placements.some((p) => p.role === 'USER') ||
-                          !placements.some((p) => p.role === 'SUPER_USER')
-                        }
-                        className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
-                      >
-                        {saving ? 'Saving…' : 'Save changes'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={cancelEdit}
-                        className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading disabled:opacity-60"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </>
-                }
-              />
-            ) : (
-              <div className="flex h-full min-h-0 flex-col gap-3 rounded-2xl border border-border bg-surface/80 p-3">
+                    )}
+                  </div>
+                </div>
+              }
+              footer={
+                <>
+                  {error ? (
+                    <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                      {error}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="submit"
+                      disabled={
+                        saving ||
+                        !placements.some((p) => p.role === 'USER') ||
+                        !placements.some((p) => p.role === 'SUPER_USER')
+                      }
+                      className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
+                    >
+                      {saving ? 'Saving…' : 'Save changes'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={cancelEdit}
+                      className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              }
+            />
+          ) : (
+            <div className="grid h-full min-h-0 gap-3 lg:grid-cols-[2fr_3fr]">
+              <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-border bg-surface/80 p-3">
+                <div>
+                  <label className={labelClass} htmlFor="title">
+                    Title
+                  </label>
+                  <input
+                    id="title"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className={inputClass}
+                    placeholder="Contract agreement"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="assigned_user_id">
+                    Assign to user
+                  </label>
+                  <p className="rounded-md border border-border bg-input px-3 py-2.5 text-sm text-body">
+                    {doc.assigned_user?.name
+                      ? `${doc.assigned_user.name} (${doc.assigned_user.email})`
+                      : doc.assigned_user?.email || '—'}
+                    <span className="mt-1 block text-xs text-muted">
+                      Assignee cannot be changed after the user has signed.
+                    </span>
+                  </p>
+                </div>
                 <p className="text-sm text-muted">
                   Canvases can only be changed while status is UPLOADED.
                 </p>
@@ -310,7 +345,7 @@ export default function SuperUserDocumentDetail() {
                     {error}
                   </p>
                 ) : null}
-                <div className="mt-auto flex flex-col gap-2 sm:max-w-xs">
+                <div className="mt-auto flex flex-col gap-2">
                   <button
                     type="submit"
                     disabled={saving}
@@ -327,9 +362,17 @@ export default function SuperUserDocumentDetail() {
                     Cancel
                   </button>
                 </div>
+              </aside>
+              <div className="min-h-0 overflow-hidden rounded-2xl border-2 border-dashed border-border-strong bg-[#0a0a0c] p-2">
+                <PdfRoleCanvases
+                  fileUrl={pdfSrc}
+                  document={doc}
+                  viewerRole={ROLES.SUPER_USER}
+                  activeRole={null}
+                />
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </form>
       </main>
     )

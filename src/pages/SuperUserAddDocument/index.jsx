@@ -117,61 +117,59 @@ export default function SuperUserAddDocument() {
         <div>
           <h1 className="font-display text-2xl font-semibold text-heading">Upload & assign PDF</h1>
           <p className="mt-0.5 text-sm text-muted">
-            Set title and assignee above, then place canvases on the preview.
+            Set title and assignee on the left, then place canvases on the preview.
           </p>
         </div>
         <UserMenu />
       </header>
 
-      <form onSubmit={handleUpload} className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="grid shrink-0 gap-3 rounded-2xl border border-border bg-surface/80 p-3 sm:grid-cols-2">
-          <div>
-            <label className={labelClass} htmlFor="title">
-              Title
-            </label>
-            <input
-              id="title"
-              required
-              value={form.title}
-              onChange={(e) => updateField('title', e.target.value)}
-              className={inputClass}
-              placeholder="Contract agreement"
-            />
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="assigned_user_id">
-              Assign to user
-            </label>
-            <select
-              id="assigned_user_id"
-              required
-              value={form.assigned_user_id}
-              onChange={(e) => updateField('assigned_user_id', e.target.value)}
-              className={inputClass}
-            >
-              <option value="">Select a user</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.email})
-                </option>
-              ))}
-            </select>
-            {!loadingUsers && users.length === 0 ? (
-              <p className="mt-2 text-xs text-muted">
-                No users with role {ROLES.USER} yet. Create a User account first.
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1">
-          <PdfSignaturePlacer
-            file={file}
-            placements={placements}
-            onChange={setPlacements}
-            sidebar={
+      <form onSubmit={handleUpload} className="min-h-0 flex-1">
+        <PdfSignaturePlacer
+          file={file}
+          placements={placements}
+          onChange={setPlacements}
+          sidebar={
+            <div className="space-y-3">
               <div>
+                <label className={labelClass} htmlFor="title">
+                  Title
+                </label>
+                <input
+                  id="title"
+                  required
+                  value={form.title}
+                  onChange={(e) => updateField('title', e.target.value)}
+                  className={inputClass}
+                  placeholder="Contract agreement"
+                />
+              </div>
+
+              <div>
+                <label className={labelClass} htmlFor="assigned_user_id">
+                  Assign to user
+                </label>
+                <select
+                  id="assigned_user_id"
+                  required
+                  value={form.assigned_user_id}
+                  onChange={(e) => updateField('assigned_user_id', e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">Select a user</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
+                {!loadingUsers && users.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted">
+                    No users with role {ROLES.USER} yet. Create a User account first.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="border-t border-border pt-3">
                 <label className={labelClass} htmlFor="file">
                   PDF file
                 </label>
@@ -183,39 +181,34 @@ export default function SuperUserAddDocument() {
                   onChange={onFileChange}
                   className="w-full text-sm text-body file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-2 file:font-semibold file:text-black"
                 />
-                {file ? (
-                  <p className="mt-1.5 truncate text-xs text-muted" title={file.name}>
-                    {file.name}
-                  </p>
-                ) : null}
               </div>
-            }
-            footer={
-              <>
-                {error ? (
-                  <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                    {error}
-                  </p>
-                ) : null}
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
-                  >
-                    {loading ? 'Uploading…' : 'Upload & assign'}
-                  </button>
-                  <Link
-                    to="/super-user"
-                    className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading"
-                  >
-                    Cancel
-                  </Link>
-                </div>
-              </>
-            }
-          />
-        </div>
+            </div>
+          }
+          footer={
+            <>
+              {error ? (
+                <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                  {error}
+                </p>
+              ) : null}
+              <div className="flex flex-col gap-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-accent px-4 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
+                >
+                  {loading ? 'Uploading…' : 'Upload & assign'}
+                </button>
+                <Link
+                  to="/super-user"
+                  className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl border border-border-strong px-4 text-sm font-semibold text-heading"
+                >
+                  Cancel
+                </Link>
+              </div>
+            </>
+          }
+        />
       </form>
     </main>
   )
