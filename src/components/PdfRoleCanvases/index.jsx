@@ -7,36 +7,6 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString()
 
-function legacyPlacements(doc) {
-  if (!doc) return []
-  const items = []
-  if (doc.signature_page != null) {
-    items.push({
-      id: 'legacy-user',
-      role: 'USER',
-      page: doc.signature_page,
-      x: doc.signature_x,
-      y: doc.signature_y,
-      width: doc.signature_width || 160,
-      height: doc.signature_height || 56,
-      label: 'User',
-    })
-  }
-  if (doc.su_signature_page != null) {
-    items.push({
-      id: 'legacy-su',
-      role: 'SUPER_USER',
-      page: doc.su_signature_page,
-      x: doc.su_signature_x,
-      y: doc.su_signature_y,
-      width: doc.su_signature_width || 160,
-      height: doc.su_signature_height || 56,
-      label: 'Super User',
-    })
-  }
-  return items
-}
-
 /**
  * While awaiting user sign: show drawable USER canvases.
  * After user sign: hide USER overlays so the stamped PDF ink is visible.
@@ -59,8 +29,7 @@ export default function PdfRoleCanvases({
   const padRefs = useRef({})
 
   const placements = useMemo(() => {
-    if (doc?.signature_placements?.length) return doc.signature_placements
-    return legacyPlacements(doc)
+    return Array.isArray(doc?.signature_placements) ? doc.signature_placements : []
   }, [doc])
 
   const status = doc?.status || ''
